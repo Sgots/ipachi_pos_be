@@ -101,6 +101,7 @@ public class ProductService {
             componentRepo.save(pc);
         }
     }
+
     public List<ProductComponentDto> componentsOf(Long parentId) {
         repo.findById(parentId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         return componentRepo.findByParentId(parentId).stream().map(pc -> {
@@ -141,7 +142,11 @@ public class ProductService {
         if (isRecipe) {
             if (req.components() == null || req.components().isEmpty())
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Recipe must have at least one ingredient");
-            buy = totalItemCostsFromRequest(req.components());
+
+            // FE is the source of truth for a recipe's buying price per unit
+            if (req.buyPrice() == null)
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Buying price is required for recipes");
+            buy = req.buyPrice().setScale(2, RoundingMode.HALF_UP);
         } else {
             if (req.buyPrice() == null)
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Buying price is required");
@@ -167,7 +172,7 @@ public class ProductService {
 
         if (isRecipe) {
             replaceComponents(p, req.components());
-            p.setBuyPrice(totalItemCostsFromDb(p.getId())); // parity with DB
+            // Do NOT override buyPrice for recipes; keep the FE-provided value.
             p = repo.save(p);
         }
 
@@ -208,7 +213,10 @@ public class ProductService {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Recipe must have at least one ingredient");
                 replaceComponents(p, req.components());
             }
-            p.setBuyPrice(totalItemCostsFromDb(p.getId()));
+            // Do NOT force buyPrice from components. Respect FE if provided, otherwise keep current.
+            if (req.buyPrice() != null) {
+                p.setBuyPrice(req.buyPrice().setScale(2, RoundingMode.HALF_UP));
+            }
             p.setProductType(ProductType.RECIPE);
         } else {
             if (req.components() != null && !req.components().isEmpty()) {
@@ -254,8 +262,6 @@ public class ProductService {
         var p = repo.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         return p.getImageContentType() == null ? "application/octet-stream" : p.getImageContentType();
     }
-
-
 
     // ----------------- DTO mappers -----------------
     private ProductComponentDto toDto(ProductComponent pc) {
