@@ -7,6 +7,7 @@ public class CheckoutRequest {
     private String customerName; // optional
     private List<TillItem> items;
 
+
     public Long getCustomerId() { return customerId; }
     public void setCustomerId(Long customerId) { this.customerId = customerId; }
     public String getCustomerName() { return customerName; }
