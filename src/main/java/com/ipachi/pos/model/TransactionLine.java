@@ -2,11 +2,14 @@ package com.ipachi.pos.model;
 
 
 import jakarta.persistence.*;
+import lombok.experimental.SuperBuilder;
+
 import java.math.BigDecimal;
 
 @Entity
 @Table(name = "tx_line")
-public class TransactionLine {
+@SuperBuilder
+public class TransactionLine extends BaseOwnedEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

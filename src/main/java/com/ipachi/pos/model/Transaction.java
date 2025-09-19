@@ -1,6 +1,8 @@
 package com.ipachi.pos.model;
 
 import jakarta.persistence.*;
+import lombok.experimental.SuperBuilder;
+
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -8,7 +10,8 @@ import java.util.List;
 
 @Entity
 @Table(name = "tx_head")
-public class Transaction {
+@SuperBuilder
+public class Transaction extends BaseOwnedEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -19,8 +22,14 @@ public class Transaction {
     @Column(nullable = false)
     private String customerName = "Walk-in";
 
-    @Column(nullable = false, precision = 18, scale = 2)
+    @Column(nullable = true, precision = 18, scale = 2)
     private BigDecimal total = BigDecimal.ZERO;
+    // add near other fields
+    @Column(name = "terminal_id")
+    private Long terminalId;
+
+    public Long getTerminalId() { return terminalId; }
+    public void setTerminalId(Long terminalId) { this.terminalId = terminalId; }
 
     @OneToMany(mappedBy = "transaction", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TransactionLine> lines = new ArrayList<>();

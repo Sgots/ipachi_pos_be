@@ -1,9 +1,11 @@
-// src/main/java/com/ipachi/pos/dto/ProductDto.java
 package com.ipachi.pos.dto;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
+/**
+ * Product DTO exposed to clients. Includes availableQuantity computed from stock movements.
+ */
 public record ProductDto(
         Long id,
         String sku,
@@ -30,5 +32,7 @@ public record ProductDto(
 
         String lifetime,
         Integer lowStock,
-        ProductSaleMode saleMode
+        ProductSaleMode saleMode,
+
+        Integer availableQuantity   // computed from stock movements (nullable)
 ) {}

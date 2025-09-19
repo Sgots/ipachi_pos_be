@@ -60,7 +60,9 @@ public class SecurityConfig {
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()        // preflight
-                        .requestMatchers("/api/auth/**").permitAll()                  // login, register, me
+                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/inventory/**").permitAll()  // Allow inventory endpoints without JWT
+                        // login, register, me
                         //.requestMatchers("/api/users/**").permitAll()                  // login, register, me
                         .requestMatchers(HttpMethod.GET, "/files/**").permitAll()     // serve uploaded files
                         .anyRequest().authenticated())

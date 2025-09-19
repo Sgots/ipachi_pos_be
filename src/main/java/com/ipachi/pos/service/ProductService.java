@@ -15,39 +15,59 @@ import com.ipachi.pos.repo.CategoryRepository;
 import com.ipachi.pos.repo.MeasurementUnitRepository;
 import com.ipachi.pos.repo.ProductComponentRepository;
 import com.ipachi.pos.repo.ProductRepository;
+import com.ipachi.pos.repo.StockMovementRepository;
+import com.ipachi.pos.security.CurrentRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.OffsetDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class ProductService {
 
     private final ProductRepository repo;
     private final CategoryRepository categories;
     private final MeasurementUnitRepository units;
     private final ProductComponentRepository componentRepo;
+    private final StockMovementRepository stockMovementRepo;
+    private final CurrentRequest ctx;
+
+    // Helper method to validate user context
+    private Long validateUserContext() {
+        Long userId = ctx.getUserId();
+        if (userId == null) {
+            throw new IllegalStateException("User ID not found in request context");
+        }
+        return userId;
+    }
 
     // ----------------- utils -----------------
     private BigDecimal nz(BigDecimal v) { return v == null ? BigDecimal.ZERO : v; }
 
     private Category resolveCategory(Long id) {
+        Long userId = validateUserContext();
         if (id == null) return null;
-        return categories.findById(id)
+        return categories.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Category not found"));
     }
 
     private MeasurementUnit resolveUnit(Long id) {
+        Long userId = validateUserContext();
         if (id == null) return null;
-        return units.findById(id)
+        return units.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unit not found"));
     }
 
@@ -63,7 +83,8 @@ public class ProductService {
     }
 
     private boolean hasComponents(Long parentId) {
-        return !componentRepo.findByParentId(parentId).isEmpty();
+        Long userId = validateUserContext();
+        return !componentRepo.findByParentIdAndUserId(parentId, userId).isEmpty();
     }
 
     // cost = sum of item costs (measurement text is not multiplied)
@@ -79,7 +100,8 @@ public class ProductService {
     }
 
     private BigDecimal totalItemCostsFromDb(Long parentId) {
-        return componentRepo.findByParentId(parentId).stream()
+        Long userId = validateUserContext();
+        return componentRepo.findByParentIdAndUserId(parentId, userId).stream()
                 .map(pc -> nz(pc.getUnitCost()))
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(2, RoundingMode.HALF_UP);
@@ -87,7 +109,8 @@ public class ProductService {
 
     // persists manual lines (component == null); measurement is free text
     private void replaceComponents(Product parent, List<ProductComponentCreate> lines) {
-        componentRepo.deleteByParentId(parent.getId());
+        Long userId = validateUserContext();
+        componentRepo.deleteByParentIdAndUserId(parent.getId(), userId);
         if (lines == null || lines.isEmpty()) return;
 
         for (var l : lines) {
@@ -97,14 +120,19 @@ public class ProductService {
                     .name(l.name())
                     .measurementText(l.measurement())
                     .unitCost(l.unitCost() == null || l.unitCost().signum() < 0 ? BigDecimal.ZERO : l.unitCost())
+                    .userId(userId)
+                    .createdAt(OffsetDateTime.now())
+                    .updatedAt(OffsetDateTime.now())
                     .build();
             componentRepo.save(pc);
         }
     }
 
     public List<ProductComponentDto> componentsOf(Long parentId) {
-        repo.findById(parentId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
-        return componentRepo.findByParentId(parentId).stream().map(pc -> {
+        Long userId = validateUserContext();
+        repo.findByIdAndUserId(parentId, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        return componentRepo.findByParentIdAndUserId(parentId, userId).stream().map(pc -> {
             var u = pc.getUnit();
             var unitCost = nz(pc.getUnitCost());
             return new ProductComponentDto(
@@ -115,9 +143,9 @@ public class ProductService {
                     u == null ? null : u.getId(),
                     u == null ? null : u.getName(),
                     u == null ? null : u.getAbbr(),
-                    pc.getMeasurementText(),      // FREE-TEXT out
+                    pc.getMeasurementText(),
                     unitCost,
-                    unitCost,                     // lineCost == unitCost (no quantity math)
+                    unitCost,
                     pc.getName()
             );
         }).toList();
@@ -125,6 +153,8 @@ public class ProductService {
 
     // ----------------- CRUD -----------------
     public ProductDto create(ProductCreate req, MultipartFile image) {
+        Long userId = validateUserContext();
+
         final boolean isRecipe = req.productType() == ProductType.RECIPE
                 || (req.components() != null && !req.components().isEmpty());
 
@@ -133,9 +163,9 @@ public class ProductService {
 
         if (rawSku.isBlank())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "SKU is required");
-        if (repo.existsBySkuIgnoreCase(rawSku))
+        if (repo.existsBySkuIgnoreCaseAndUserId(rawSku, userId))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "SKU already exists");
-        if (barcode != null && repo.existsByBarcodeIgnoreCase(barcode))
+        if (barcode != null && repo.existsByBarcodeIgnoreCaseAndUserId(barcode, userId))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Barcode already exists");
 
         BigDecimal buy;
@@ -143,7 +173,6 @@ public class ProductService {
             if (req.components() == null || req.components().isEmpty())
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Recipe must have at least one ingredient");
 
-            // FE is the source of truth for a recipe's buying price per unit
             if (req.buyPrice() == null)
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Buying price is required for recipes");
             buy = req.buyPrice().setScale(2, RoundingMode.HALF_UP);
@@ -165,6 +194,9 @@ public class ProductService {
                 .saleMode(req.saleMode() == null ? ProductSaleMode.PER_UNIT : req.saleMode())
                 .lifetime(req.lifetime())
                 .lowStock(req.lowStock())
+                .userId(userId)
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
                 .build();
 
         attachImageIfPresent(p, image);
@@ -172,22 +204,24 @@ public class ProductService {
 
         if (isRecipe) {
             replaceComponents(p, req.components());
-            // Do NOT override buyPrice for recipes; keep the FE-provided value.
             p = repo.save(p);
         }
 
-        return toDto(p, null);
+        return toDto(p);
     }
 
     public ProductDto update(Long id, ProductUpdate req, MultipartFile image) {
-        var p = repo.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        Long userId = validateUserContext();
+
+        var p = repo.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
 
         final String rawSku = req.sku() == null ? "" : req.sku().trim();
         final String barcode = (req.barcode() == null || req.barcode().isBlank()) ? null : req.barcode().trim();
 
-        if (!rawSku.isBlank() && repo.existsBySkuIgnoreCaseAndIdNot(rawSku, id))
+        if (!rawSku.isBlank() && repo.existsBySkuIgnoreCaseAndUserIdAndIdNot(rawSku, userId, id))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "SKU already exists");
-        if (barcode != null && repo.existsByBarcodeIgnoreCaseAndIdNot(barcode, id))
+        if (barcode != null && repo.existsByBarcodeIgnoreCaseAndUserIdAndIdNot(barcode, userId, id))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Barcode already exists");
         if (rawSku.isBlank())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "SKU is required");
@@ -202,7 +236,6 @@ public class ProductService {
         p.setLifetime(req.lifetime());
         p.setLowStock(req.lowStock());
 
-        // decide SINGLE/RECIPE
         Boolean dtoIsRecipe = (req.productType() == null) ? null : (req.productType() == ProductType.RECIPE);
         boolean isRecipe = (dtoIsRecipe != null) ? dtoIsRecipe
                 : (req.components() != null ? !req.components().isEmpty() : hasComponents(p.getId()));
@@ -213,14 +246,13 @@ public class ProductService {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Recipe must have at least one ingredient");
                 replaceComponents(p, req.components());
             }
-            // Do NOT force buyPrice from components. Respect FE if provided, otherwise keep current.
             if (req.buyPrice() != null) {
                 p.setBuyPrice(req.buyPrice().setScale(2, RoundingMode.HALF_UP));
             }
             p.setProductType(ProductType.RECIPE);
         } else {
             if (req.components() != null && !req.components().isEmpty()) {
-                componentRepo.deleteByParentId(p.getId());
+                componentRepo.deleteByParentIdAndUserId(p.getId(), userId);
             }
             if (req.buyPrice() == null)
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Buying price is required");
@@ -229,38 +261,77 @@ public class ProductService {
         }
 
         if (image != null && !image.isEmpty()) attachImageIfPresent(p, image);
+        p.setUpdatedAt(OffsetDateTime.now());
         p = repo.save(p);
-        return toDto(p, null);
+        return toDto(p);
     }
 
     public void delete(Long id) {
-        if (!repo.existsById(id)) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-        componentRepo.deleteByParentId(id);
+        Long userId = validateUserContext();
+
+        if (!repo.existsByIdAndUserId(id, userId))
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        componentRepo.deleteByParentIdAndUserId(id, userId);
         repo.deleteById(id);
     }
 
     public Page<ProductDto> list(String q, Pageable pageable, String baseImageUrl) {
+        Long userId = validateUserContext();
+
         var page = (q == null || q.isBlank())
-                ? repo.findAll(pageable)
-                : repo.findByNameContainingIgnoreCaseOrSkuContainingIgnoreCaseOrBarcodeContainingIgnoreCase(
-                q.trim(), q.trim(), q.trim(), pageable);
-        return page.map(p -> toDto(p, baseImageUrl));
+                ? repo.findByUserId(userId, pageable)
+                : repo.findByNameContainingIgnoreCaseOrSkuContainingIgnoreCaseOrBarcodeContainingIgnoreCaseAndUserId(
+                q.trim(), q.trim(), q.trim(), userId, pageable);
+
+        var products = page.getContent();
+        var ids = products.stream().map(Product::getId).toList();
+        var availMap = computeAvailableMapForIds(ids, userId);
+
+        return page.map(p -> toDto(p, baseImageUrl, availMap.get(p.getId())));
     }
 
     public List<ProductDto> all(String baseImageUrl) {
-        return repo.findAll(Sort.by("name").ascending())
-                .stream().map(p -> toDto(p, baseImageUrl)).toList();
+        Long userId = validateUserContext();
+
+        var list = repo.findByUserIdOrderByNameAsc(userId);
+        var ids = list.stream().map(Product::getId).toList();
+        var availMap = computeAvailableMapForIds(ids, userId);
+        return list.stream().map(p -> toDto(p, baseImageUrl, availMap.get(p.getId()))).toList();
     }
 
-    public byte[] imageBytes(Long id) {
-        var p = repo.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+    public byte[] imageBytes(Long id, Long userId) {
+        var p = repo.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         if (p.getImageData() == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         return p.getImageData();
     }
 
-    public String imageContentType(Long id) {
-        var p = repo.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+    public String imageContentType(Long id, Long userId) {
+        var p = repo.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         return p.getImageContentType() == null ? "application/octet-stream" : p.getImageContentType();
+    }
+
+    // --- stock helpers ---
+    /**
+     * Compute available quantity (Integer) for a set of product ids for the given user.
+     * Returns a map productId -> availableQuantity (defaults to 0 for missing entries).
+     */
+    private Map<Long, Integer> computeAvailableMapForIds(List<Long> ids, Long userId) {
+        var map = new HashMap<Long, Integer>();
+        if (ids == null || ids.isEmpty()) return map;
+
+        var rows = stockMovementRepo.totalsByProductIdAndUserId(userId);
+        for (Object[] row : rows) {
+            if (row == null || row.length < 2) continue;
+            Number pid = (Number) row[0];
+            java.math.BigDecimal qty = (java.math.BigDecimal) row[1];
+            if (pid == null) continue;
+            int v = qty == null ? 0 : qty.setScale(0, RoundingMode.DOWN).intValue();
+            map.put(pid.longValue(), v);
+        }
+        for (Long id : ids) map.putIfAbsent(id, 0);
+        return map;
     }
 
     // ----------------- DTO mappers -----------------
@@ -271,17 +342,19 @@ public class ProductService {
                 pc.getComponent() == null ? null : pc.getComponent().getId(),
                 pc.getComponent() == null ? null : pc.getComponent().getName(),
                 pc.getComponent() == null ? null : pc.getComponent().getSku(),
-                null, null, null,                       // unit not used for manual lines
+                null, null, null,
                 pc.getMeasurementText(),
                 cost,
-                cost,                                   // lineCost = unitCost
+                cost,
                 pc.getName()
         );
     }
 
-    private ProductDto toDto(Product p) { return toDto(p, null); }
+    private ProductDto toDto(Product p) { return toDto(p, null, null); }
 
-    private ProductDto toDto(Product p, String baseImageUrl) {
+    private ProductDto toDto(Product p, String baseImageUrl) { return toDto(p, baseImageUrl, null); }
+
+    private ProductDto toDto(Product p, String baseImageUrl, Integer availableQuantity) {
         boolean hasImage = p.getImageData() != null && p.getImageData().length > 0;
         String imageUrl = hasImage && baseImageUrl != null
                 ? baseImageUrl + "/api/inventory/products/" + p.getId() + "/image"
@@ -304,7 +377,8 @@ public class ProductService {
                 recipeCost,
                 p.getLifetime(),
                 p.getLowStock(),
-                p.getSaleMode()
+                p.getSaleMode(),
+                availableQuantity
         );
     }
 }

@@ -4,13 +4,15 @@ package com.ipachi.pos.model;
 import com.ipachi.pos.dto.CashMovementType;
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.experimental.SuperBuilder;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 @Entity
 @Data
 @Table(name = "cash_movement")
-public class CashMovement {
+@SuperBuilder
+public class CashMovement extends BaseOwnedEntity{
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
@@ -28,8 +30,7 @@ public class CashMovement {
             private String reference;
     private String reason;
 
-            @Column(nullable = false)
-    private OffsetDateTime createdAt = OffsetDateTime.now();
+
 
             // getters and setters
         }

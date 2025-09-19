@@ -24,7 +24,7 @@ public class TillController {
             }
 
             @GetMapping("/active")
-    public ResponseEntity<ApiResponse<TillSession>> active(@RequestParam String terminalId) {
+    public ResponseEntity<ApiResponse<TillSession>> active(@RequestParam Long terminalId) {
                 TillSession s = service.getActive(terminalId);
                 return ResponseEntity.ok(ApiResponse.ok(s));
             }

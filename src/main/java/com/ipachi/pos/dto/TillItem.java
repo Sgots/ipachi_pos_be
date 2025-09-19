@@ -1,5 +1,7 @@
 package com.ipachi.pos.dto;
 
+import java.math.BigDecimal;
+
 public class TillItem {
     private String sku;
     private String name;
@@ -19,7 +21,7 @@ public class TillItem {
     public void setSku(String sku) { this.sku = sku; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
-    public double getPrice() { return price; }
+    public Double getPrice() { return price; }
     public void setPrice(double price) { this.price = price; }
     public int getQty() { return qty; }
     public void setQty(int qty) { this.qty = qty; }

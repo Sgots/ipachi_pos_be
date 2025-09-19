@@ -30,8 +30,9 @@ public class CashTillController {
         Transaction tx = checkoutService.checkout(req);
 
         // 2) If a till is open for the terminal, record SALE
-        if (req.getTerminalId() != null) {
-            TillSession active = tillService.getActive(req.getTerminalId());
+        Long terminalId = tx.getTerminalId(); // terminal is resolved & stamped in the service
+        if (terminalId != null) {
+            TillSession active = tillService.getActive(terminalId);
             if (active != null) {
                 MovementRequest mr = new MovementRequest();
                 mr.amount = tx.getTotal();
@@ -50,4 +51,5 @@ public class CashTillController {
         );
         return ResponseEntity.ok(resp);
     }
+
 }

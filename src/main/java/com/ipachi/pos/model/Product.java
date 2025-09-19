@@ -5,6 +5,7 @@ import com.ipachi.pos.dto.ProductSaleMode;
 import com.ipachi.pos.dto.ProductType;
 import jakarta.persistence.*;
 import lombok.*;
+import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -17,8 +18,10 @@ import java.time.OffsetDateTime;
                 @UniqueConstraint(name="uk_inv_product_sku", columnNames = "sku"),
                 @UniqueConstraint(name="uk_inv_product_barcode", columnNames = "barcode")
         })
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
-public class Product {
+@Getter @Setter @SuperBuilder
+@NoArgsConstructor
+@AllArgsConstructor
+public class Product extends BaseOwnedEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
@@ -75,9 +78,5 @@ public class Product {
     @Column(name="image_name", length = 255)
     private String imageFilename;
 
-    @CreationTimestamp
-    private OffsetDateTime createdAt;
 
-    @UpdateTimestamp
-    private OffsetDateTime updatedAt;
 }

@@ -3,13 +3,16 @@ package com.ipachi.pos.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.UuidGenerator;
 
 import java.time.OffsetDateTime;
 
 @Entity @Table(name = "file_assets")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
-public class FileAsset {
+@Getter @Setter @SuperBuilder
+@NoArgsConstructor
+@AllArgsConstructor
+public class FileAsset extends BaseOwnedEntity {
 
     @Id
     @GeneratedValue

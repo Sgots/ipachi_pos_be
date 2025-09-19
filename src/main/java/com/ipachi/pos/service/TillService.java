@@ -7,18 +7,22 @@ import com.ipachi.pos.model.CashMovement;
 import com.ipachi.pos.model.TillSession;
 import com.ipachi.pos.repo.CashMovementRepository;
 import com.ipachi.pos.repo.TillSessionRepository;
+import com.ipachi.pos.security.CurrentRequest;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
         import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.List;
 
         @Service
 public class TillService {
     private final TillSessionRepository tillRepo;
     private final CashMovementRepository movRepo;
-    public TillService(TillSessionRepository tillRepo, CashMovementRepository movRepo) {
-                this.tillRepo = tillRepo; this.movRepo = movRepo;
+            private final CurrentRequest ctx; // Inject CurrentRequest to get userId from headers
+    public TillService(TillSessionRepository tillRepo, CashMovementRepository movRepo, CurrentRequest ctx) {
+                this.tillRepo = tillRepo; this.movRepo = movRepo; this.ctx = ctx;
             }
 
             @Transactional
@@ -33,24 +37,32 @@ public class TillService {
                 return tillRepo.save(s);
             }
 
-            public TillSession getActive(String terminalId) {
+            public TillSession getActive(Long terminalId) {
                 return tillRepo.findFirstByTerminalIdAndStatus(terminalId, TillSessionStatus.OPEN)
                                 .orElse(null);
             }
 
             @Transactional
-    public CashMovement addMovement(Long tillId, CashMovementType type, MovementRequest req) {
+            public CashMovement addMovement(Long tillId, CashMovementType type, MovementRequest req) {
                 TillSession s = tillRepo.findById(tillId).orElseThrow();
-                if (s.getStatus() == TillSessionStatus.CLOSED) throw new IllegalStateException("Till is closed");
-                CashMovement m = new CashMovement();
-                m.setTillSession(s);
-                m.setType(type);
-                m.setAmount(req.amount);
-                m.setReference(req.reference);
-                m.setReason(req.reason);
+                if (s.getStatus() == TillSessionStatus.CLOSED) {
+                    throw new IllegalStateException("Till is closed");
+                }
+
+                // Use builder pattern with userId if it extends BaseOwnedEntity
+                CashMovement m = CashMovement.builder()
+                        .tillSession(s)
+                        .type(type)
+                        .amount(req.amount)
+                        .reference(req.reference)
+                        .reason(req.reason)
+                        .userId(ctx.getUserId()) // Add this if it extends BaseOwnedEntity TO CHANGE
+                        .createdAt(OffsetDateTime.now()) // Add if needed
+                        .updatedAt(OffsetDateTime.now()) // Add if needed
+                        .build();
+
                 return movRepo.save(m);
             }
-
             public TillSummary summary(Long tillId) {
                 TillSession s = tillRepo.findById(tillId).orElseThrow();
                 List<CashMovement> list = movRepo.findByTillSession(s);

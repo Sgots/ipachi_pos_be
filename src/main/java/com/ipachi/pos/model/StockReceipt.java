@@ -1,26 +1,30 @@
-// src/main/java/com/ipachi/pos/model/StockReceipt.java
 package com.ipachi.pos.model;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-
-import java.time.Instant;
+import lombok.experimental.SuperBuilder;
 
 @Entity
 @Table(name = "inv_stock_receipt", indexes = {
-        @Index(name="idx_inv_receipt_label", columnList = "label")
+        @Index(name = "idx_inv_receipt_label", columnList = "label"),
+        @Index(name = "idx_inv_receipt_user_id", columnList = "user_id")
 })
-@Getter @Setter @Builder
-@NoArgsConstructor @AllArgsConstructor
-public class StockReceipt {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+@Getter
+@Setter
+@SuperBuilder
+@NoArgsConstructor
+@AllArgsConstructor
+
+public class StockReceipt extends BaseOwnedEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable=false)
+    @Column(nullable = false)
     private String label;
 
-    @Column(nullable=false)
+    @Column(nullable = false)
     private String fileName;
 
     private String contentType;
@@ -28,9 +32,8 @@ public class StockReceipt {
     private Long fileSize;
 
     @Lob
-    @Column(name="file_data", columnDefinition = "LONGBLOB")
+    @Column(name = "file_data", columnDefinition = "LONGBLOB")
     private byte[] data;
 
-    @CreationTimestamp
-    private Instant createdAt;
+    // createdAt/updatedAt and userId are inherited from BaseOwnedEntity
 }

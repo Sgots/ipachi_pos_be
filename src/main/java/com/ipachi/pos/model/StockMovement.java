@@ -4,6 +4,7 @@ package com.ipachi.pos.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.math.BigDecimal;
@@ -11,8 +12,10 @@ import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "inv_stock_movements")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
-public class StockMovement {
+@Getter @Setter @SuperBuilder
+@NoArgsConstructor
+@AllArgsConstructor
+public class StockMovement extends BaseOwnedEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
@@ -29,6 +32,5 @@ public class StockMovement {
 
     private String note;
 
-    @CreationTimestamp
-    private OffsetDateTime createdAt;
+
 }

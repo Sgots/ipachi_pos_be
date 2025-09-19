@@ -1,14 +1,13 @@
-// src/main/java/com/ipachi/pos/dto/StockReceiptDto.java
 package com.ipachi.pos.dto;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
 
 public record StockReceiptDto(
         Long id,
-        String label,
+        String label,  // This might be the reference number
         String fileName,
         String contentType,
         Long fileSize,
         String fileUrl,
-        Instant createdAt
+        OffsetDateTime createdAt
 ) {}

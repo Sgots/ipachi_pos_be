@@ -10,7 +10,9 @@ import org.springframework.data.domain.*;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Enumeration;
 import java.util.List;
 
 @RestController
@@ -60,7 +62,55 @@ public class ProductController {
     ) {
         return service.update(id, req, image);
     }
+    @GetMapping("/{id}/image")
+    public ResponseEntity<byte[]> image(@PathVariable(name = "id") Long id, HttpServletRequest http) {
+        // DEBUG: Log all headers received
+        System.out.println("=== IMAGE REQUEST DEBUG ===");
+        System.out.println("Product ID: " + id);
+        System.out.println("All headers received:");
+        Enumeration<String> headerNames = http.getHeaderNames();
+        while (headerNames.hasMoreElements()) {
+            String headerName = headerNames.nextElement();
+            System.out.println("  " + headerName + ": " + http.getHeader(headerName));
+        }
 
+        // Your existing extractUserId logic
+        Long userId = extractUserId(http);
+        System.out.println("Extracted userId: " + (userId != null ? userId : "NULL"));
+
+        if (userId == null) {
+            System.out.println("*** RETURNING 403 - No userId ***");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        try {
+            var bytes = service.imageBytes(id, userId);
+            var type = service.imageContentType(id, userId);
+            System.out.println("*** SUCCESS - Image served, size: " + bytes.length);
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType(type))
+                    .cacheControl(CacheControl.noCache())
+                    .body(bytes);
+        } catch (ResponseStatusException ex) {
+            System.out.println("*** SERVICE ERROR: " + ex.getStatusCode() + " - " + ex.getMessage());
+            if (ex.getStatusCode() == HttpStatus.NOT_FOUND) {
+                return ResponseEntity.notFound().build();
+            }
+            throw ex;
+        }
+    }
+    // Add this minimal helper method to extract userId from headers
+    private Long extractUserId(HttpServletRequest http) {
+        String userIdStr = http.getHeader("X-User-Id");
+        if (userIdStr == null || userIdStr.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(userIdStr.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable(name = "id") Long id) {
@@ -85,15 +135,6 @@ public class ProductController {
         return service.all(base(http));
     }
 
-    @GetMapping("/{id}/image")
-    public ResponseEntity<byte[]> image(@PathVariable(name = "id") Long id) {
-        var bytes = service.imageBytes(id);
-        var type = service.imageContentType(id);
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(type))
-                .cacheControl(CacheControl.noCache())
-                .body(bytes);
-    }
 
     // Components preview (recipe lines)
     @GetMapping("/{id}/components")

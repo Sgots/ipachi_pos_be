@@ -1,10 +1,12 @@
 package com.ipachi.pos.model;
 
 import jakarta.persistence.*;
+import lombok.experimental.SuperBuilder;
 
 @Entity
 @Table(name = "inventory_item")
-public class InventoryItem {
+@SuperBuilder
+public class InventoryItem extends BaseOwnedEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 

@@ -12,8 +12,8 @@ public class UserProfile {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @OneToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id", unique = true, nullable = false)
+    @OneToOne(fetch = FetchType.LAZY, optional = false, cascade = CascadeType.MERGE)
+    @JoinColumn(name = "user_id", referencedColumnName = "user_id", unique = true, nullable = false)
     private User user;
 
     private String title;           // Mr/Ms/Dr

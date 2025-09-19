@@ -7,11 +7,13 @@ import com.ipachi.pos.model.User;
 import com.ipachi.pos.model.UserRole;
 import com.ipachi.pos.repo.UserRepository;
 import com.ipachi.pos.security.JwtService;
+import com.ipachi.pos.events.UserCreatedEvent;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.*;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.context.ApplicationEventPublisher;
 
 @Service
 @RequiredArgsConstructor
@@ -20,6 +22,7 @@ public class AuthService {
     private final PasswordEncoder encoder;
     private final AuthenticationManager authManager;
     private final JwtService jwt;
+    private final ApplicationEventPublisher events;
 
     @Transactional
     public AuthResponse register(RegisterRequest req) {
@@ -33,6 +36,8 @@ public class AuthService {
                 .enabled(true)
                 .build();
         users.save(user);
+                // Fire a domain event so a default Terminal is created & linked to this user
+                        events.publishEvent(new UserCreatedEvent(user.getId()));
         String token = jwt.generateToken(user.getUsername());
         return new AuthResponse(token, user.getUsername(), user.getRole().name());
     }

@@ -3,7 +3,9 @@ package com.ipachi.pos.model;
 
 import com.ipachi.pos.dto.TillSessionStatus;
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -11,13 +13,15 @@ import java.time.OffsetDateTime;
 @Data
 @Entity
 @Table(name = "till_session")
+@NoArgsConstructor
+@AllArgsConstructor
 public class TillSession {
  @Id
  @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
      @Column(nullable = false)
- private String terminalId;
+ private Long terminalId;
   @Column(nullable = false)
   private Long openedByUserId;
    @Column(nullable = false)
