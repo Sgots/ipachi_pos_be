@@ -11,6 +11,10 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Objects;
 
 @Entity
 @Table(name = "inv_products",
@@ -44,12 +48,10 @@ public class Product extends BaseOwnedEntity {
     @Column(nullable = false, length = 16)
     private ProductType productType = ProductType.SINGLE;
 
-    // NEW: how it’s sold at POS
     @Enumerated(EnumType.STRING)
     @Column(name = "sale_mode", nullable = false, length = 16)
     private ProductSaleMode saleMode = ProductSaleMode.PER_UNIT;
 
-    // NEW: lifetime and low stock
     @Column(name = "lifetime", length = 64)
     private String lifetime; // e.g., "7 days"
 
@@ -64,8 +66,12 @@ public class Product extends BaseOwnedEntity {
     @JoinColumn(name = "unit_id")
     private MeasurementUnit unit;
 
+    // IMPORTANT:
+    // - Keep a single List instance (never replace it).
+    // - Use builder default so Lombok @Builder/@SuperBuilder doesn't set it to null.
     @OneToMany(mappedBy = "parent", cascade = CascadeType.ALL, orphanRemoval = true)
-    private java.util.List<ProductComponent> components = new java.util.ArrayList<>();
+    @Builder.Default
+    private List<ProductComponent> components = new ArrayList<>();
 
     // Image
     @Lob @Basic(fetch = FetchType.LAZY)
@@ -78,5 +84,51 @@ public class Product extends BaseOwnedEntity {
     @Column(name="image_name", length = 255)
     private String imageFilename;
 
+    /* =======================
+       Relationship helpers
+       ======================= */
 
+    /** Attach a component and keep both sides in sync. */
+    public void addComponent(ProductComponent pc) {
+        if (pc == null) return;
+        components.add(pc);
+        pc.setParent(this);
+    }
+
+    /** Detach a component and keep both sides in sync. */
+    public void removeComponent(ProductComponent pc) {
+        if (pc == null) return;
+        components.remove(pc);
+        pc.setParent(null);
+    }
+
+    /** Remove all components owned by a given userId (safe with orphanRemoval). */
+    public void removeComponentsForUser(Long userId) {
+        for (Iterator<ProductComponent> it = components.iterator(); it.hasNext();) {
+            ProductComponent pc = it.next();
+            if (Objects.equals(pc.getUserId(), userId)) {
+                it.remove();     // mutate the SAME list instance
+                pc.setParent(null);
+            }
+        }
+    }
+
+    /**
+     * Replace components for a given userId in a Hibernate-safe way:
+     * - mutate current list (don’t reassign)
+     * - orphanRemoval will delete removed children
+     */
+    public void replaceComponentsForUser(Long userId, List<ProductComponent> newOnes) {
+        // 1) remove old
+        removeComponentsForUser(userId);
+        // 2) add new
+        if (newOnes != null) {
+            for (ProductComponent pc : newOnes) {
+                if (pc != null) {
+                    pc.setUserId(userId);
+                    addComponent(pc);
+                }
+            }
+        }
+    }
 }

@@ -11,4 +11,6 @@ public interface TerminalRepository extends JpaRepository<Terminal, Long> {
     Optional<Terminal> findByIdAndUserId(Long id, Long userId);
     Optional<Terminal> findFirstByUserIdOrderByIdAsc(Long userId);
     boolean existsByUserId(Long userId);
+    Optional<Terminal> findByUserIdAndName(Long userId, String name);
+
 }
