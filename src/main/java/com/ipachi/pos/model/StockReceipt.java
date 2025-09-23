@@ -7,19 +7,23 @@ import lombok.experimental.SuperBuilder;
 @Entity
 @Table(name = "inv_stock_receipt", indexes = {
         @Index(name = "idx_inv_receipt_label", columnList = "label"),
-        @Index(name = "idx_inv_receipt_user_id", columnList = "user_id")
+        @Index(name = "idx_inv_receipt_user_id", columnList = "user_id"),
+        @Index(name = "idx_inv_receipt_business_id", columnList = "business_id")
 })
 @Getter
 @Setter
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
-
 public class StockReceipt extends BaseOwnedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /** Owner scope: which business this receipt belongs to */
+    @Column(name = "business_id", nullable = false)
+    private Long businessId;
 
     @Column(nullable = false)
     private String label;

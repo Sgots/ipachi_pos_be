@@ -1,8 +1,10 @@
+// src/main/java/com/ipachi/pos/controller/ProductController.java
 package com.ipachi.pos.controller;
 
 import com.ipachi.pos.dto.*;
 import com.ipachi.pos.service.ProductService;
 import com.ipachi.pos.service.StockService;
+import com.ipachi.pos.security.CurrentRequest;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +23,7 @@ import java.util.List;
 public class ProductController {
     private final ProductService service;
     private final StockService stockService;
+    private final CurrentRequest ctx;
 
     private String base(HttpServletRequest req) {
         var url = req.getRequestURL().toString();
@@ -62,55 +65,38 @@ public class ProductController {
     ) {
         return service.update(id, req, image);
     }
+
     @GetMapping("/{id}/image")
     public ResponseEntity<byte[]> image(@PathVariable(name = "id") Long id, HttpServletRequest http) {
-        // DEBUG: Log all headers received
+        // DEBUG remains (optional)
         System.out.println("=== IMAGE REQUEST DEBUG ===");
         System.out.println("Product ID: " + id);
-        System.out.println("All headers received:");
         Enumeration<String> headerNames = http.getHeaderNames();
         while (headerNames.hasMoreElements()) {
             String headerName = headerNames.nextElement();
             System.out.println("  " + headerName + ": " + http.getHeader(headerName));
         }
 
-        // Your existing extractUserId logic
-        Long userId = extractUserId(http);
-        System.out.println("Extracted userId: " + (userId != null ? userId : "NULL"));
-
-        if (userId == null) {
-            System.out.println("*** RETURNING 403 - No userId ***");
+        Long businessId = ctx.getBusinessId();
+        if (businessId == null) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
         try {
-            var bytes = service.imageBytes(id, userId);
-            var type = service.imageContentType(id, userId);
-            System.out.println("*** SUCCESS - Image served, size: " + bytes.length);
+            var bytes = service.imageBytes(id, businessId);
+            var type  = service.imageContentType(id, businessId);
             return ResponseEntity.ok()
                     .contentType(MediaType.parseMediaType(type))
                     .cacheControl(CacheControl.noCache())
                     .body(bytes);
         } catch (ResponseStatusException ex) {
-            System.out.println("*** SERVICE ERROR: " + ex.getStatusCode() + " - " + ex.getMessage());
             if (ex.getStatusCode() == HttpStatus.NOT_FOUND) {
                 return ResponseEntity.notFound().build();
             }
             throw ex;
         }
     }
-    // Add this minimal helper method to extract userId from headers
-    private Long extractUserId(HttpServletRequest http) {
-        String userIdStr = http.getHeader("X-User-Id");
-        if (userIdStr == null || userIdStr.trim().isEmpty()) {
-            return null;
-        }
-        try {
-            return Long.parseLong(userIdStr.trim());
-        } catch (NumberFormatException e) {
-            return null;
-        }
-    }
+
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable(name = "id") Long id) {
@@ -135,15 +121,11 @@ public class ProductController {
         return service.all(base(http));
     }
 
-
-    // Components preview (recipe lines)
     @GetMapping("/{id}/components")
     public List<ProductComponentDto> components(@PathVariable("id") Long id) {
         return service.componentsOf(id);
     }
 
-    // Restock (delegates to StockService)
-    // ProductController.java
     @PostMapping(path = "/{id}/restock", consumes = MediaType.APPLICATION_JSON_VALUE)
     public RestockResponse restock(@PathVariable("id") Long id, @RequestBody RestockRequest req) {
         return stockService.restock(id, req);

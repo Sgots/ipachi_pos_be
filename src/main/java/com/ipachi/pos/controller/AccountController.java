@@ -17,6 +17,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -124,27 +125,7 @@ public class AccountController {
     // ----------------------------
     // Settings
     // ----------------------------
-    @GetMapping("/settings")
-    public ResponseEntity<?> getSettings() {
-        Long userId = currentUserId();
-        if (userId == null) {
-            return ResponseEntity.status(401).body(Map.of("error", "User not authenticated"));
-        }
 
-        Settings settings = settingsService.getSettings(userId);
-        return ResponseEntity.ok(settings != null ? settings : new Settings());
-    }
-
-    @PutMapping("/settings")
-    public ResponseEntity<String> updateSettings(@RequestBody Settings settings) {
-        Long userId = currentUserId();
-        if (userId == null) {
-            return ResponseEntity.status(401).build();
-        }
-
-        settingsService.updateSettings(userId, settings);
-        return ResponseEntity.ok("updated");
-    }
 
     // ----------------------------
     // Security - Change Password
@@ -191,6 +172,7 @@ public class AccountController {
      * Serve the user's profile picture by assetId.
      * Requires authentication; verifies the asset belongs to the current user.
      */
+    @PreAuthorize("permitAll()")
     @GetMapping("/user-profile/picture/file/{assetId}")
     public ResponseEntity<ByteArrayResource> getUserProfilePicture(@PathVariable String assetId) {
         Long userId = currentUserId();
@@ -253,10 +235,8 @@ public class AccountController {
      */
     @GetMapping("/business-profile/logo/file/{assetId}")
     public ResponseEntity<ByteArrayResource> getBusinessLogo(@PathVariable String assetId) {
-        Long userId = currentUserId();
-        if (userId == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
+        Long userId = biz();
+        System.out.println("business ID" + userId);
 
         try {
             BusinessProfile bp = businessService.getBusinessProfile(userId);
@@ -365,5 +345,10 @@ public class AccountController {
             dto.put("logoUrl", null);
         }
         return dto;
+    }
+    private Long biz() {
+        Long v = currentRequest.getBusinessId();
+        if (v == null) throw new IllegalStateException("X-Business-Id missing");
+        return v;
     }
 }

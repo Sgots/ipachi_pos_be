@@ -6,20 +6,22 @@ import com.ipachi.pos.model.Product;
 import com.ipachi.pos.model.StockMovement;
 import com.ipachi.pos.model.Transaction;
 import com.ipachi.pos.model.TransactionLine;
-import com.ipachi.pos.repo.ProductRepository;
-import com.ipachi.pos.repo.StockMovementRepository;
-import com.ipachi.pos.repo.TransactionLineRepository;
-import com.ipachi.pos.repo.TransactionRepository;
+import com.ipachi.pos.repo.*;
 import com.ipachi.pos.security.CurrentRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+
+import static com.ipachi.pos.tax.TaxCalculator.line;
 
 @Service
 @RequiredArgsConstructor
@@ -28,9 +30,23 @@ public class CheckoutService {
 
     private final TransactionRepository txRepo;
     private final TransactionLineRepository lineRepo;
-    private final ProductRepository productRepo;        // NEW: Product repository
-    private final StockMovementRepository stockRepo;    // NEW: Stock movement repository
+    private final ProductRepository productRepo;
+    private final StockMovementRepository stockRepo;
     private final CurrentRequest ctx;
+
+    private final SettingsRepository settingsRepo;
+
+    private Long biz() {
+        Long v = ctx.getBusinessId();
+        if (v == null) throw new IllegalStateException("X-Business-Id missing");
+        return v;
+    }
+    private Long user() {
+        Long v = ctx.getUserId();
+        if (v == null) throw new IllegalStateException("X-User-Id missing");
+        return v;
+    }
+    private Long term() { return ctx.getTerminalId(); }
 
     /**
      * Persist a transaction and its line items, update inventory levels,
@@ -38,61 +54,138 @@ public class CheckoutService {
      */
     @Transactional
     public Transaction checkout(CheckoutRequest req) {
-        // Validate user context from headers
-        Long userId = ctx.getUserId();
-        if (userId == null) {
-            throw new IllegalStateException("User ID not found in request headers");
-        }
+        Long businessId = biz();
+        Long userId = user();
 
-        log.info("Processing checkout for userId: {}, items: {}", userId, req.getItems().size());
+        var items = (req.getItems() == null) ? List.<TillItem>of() : req.getItems();
+        log.info("Processing checkout for businessId: {}, userId: {}, items: {}", businessId, userId, items.size());
 
-        // 1) Calculate total FIRST before creating transaction
-        BigDecimal total = calculateTotal(req.getItems());
+        // VAT settings
+        var st = settingsRepo.findByBusinessId(businessId).orElse(null);
+        boolean enableVat        = st != null && st.isEnableVat();
+        boolean pricesIncludeVat = st != null && st.isPricesIncludeVat();
+        BigDecimal ratePct       = (st != null && st.getVatRate() != null) ? st.getVatRate() : BigDecimal.ZERO;
 
-        // 2) Create transaction head with total already calculated
+        // Pre-scale zero for NOT NULL columns
+        BigDecimal ZERO2 = BigDecimal.ZERO.setScale(2);
+
+        // 1) Create tx head with zeroed totals (avoids NOT NULL violations on first insert)
         Transaction tx = Transaction.builder()
-                .customerName(req.getCustomerName() != null && !req.getCustomerName().isBlank()
-                        ? req.getCustomerName()
-                        : "Walk-in")
+                .customerName((req.getCustomerName() != null && !req.getCustomerName().isBlank())
+                        ? req.getCustomerName() : "Walk-in")
+                .businessId(businessId)
+                .createdByUserId(userId)
                 .userId(userId)
-                .total(total)
+                .terminalId(term())
+                .subtotalNet(ZERO2)   // <-- important
+                .totalVat(ZERO2)      // <-- important
+                .totalGross(ZERO2)    // <-- important
+                .total(ZERO2)         // legacy/overall total aligned to gross
                 .createdAt(OffsetDateTime.now())
                 .updatedAt(OffsetDateTime.now())
                 .build();
 
-        // Single save - total is already set
-        tx = txRepo.save(tx);
-        log.debug("Created transaction ID: {} with total: {} for user: {}", tx.getId(), total, userId);
+        tx = txRepo.save(tx); // safe: all NOT NULL money columns are set
 
-        // 3) Process line items and inventory updates
-        List<TillItem> items = req.getItems();
+        // 2) Accumulators
+        BigDecimal sumNet   = ZERO2;
+        BigDecimal sumVat   = ZERO2;
+        BigDecimal sumGross = ZERO2;
+
         List<TransactionLine> savedLines = new ArrayList<>();
 
-        if (items != null && !items.isEmpty()) {
-            for (TillItem item : items) {
-                savedLines.add(createAndSaveLineItem(tx, item, userId));
+        for (TillItem item : items) {
+            // price & qty
+            BigDecimal unit = safe(BigDecimal.valueOf(item.getPrice())).setScale(2, RoundingMode.HALF_UP);
+            int qty = Math.max(0, item.getQty());
+
+            // Resolve product (for profit & stock)
+            var product = productRepo.findBySkuIgnoreCaseAndBusinessId(item.getSku().trim(), businessId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                            "Product not found for SKU in this business"));
+
+            BigDecimal buy = safe(product.getBuyPrice());
+            BigDecimal lineBase = unit.multiply(BigDecimal.valueOf(qty)).setScale(2, RoundingMode.HALF_UP);
+
+            // VAT breakdown (your TaxCalculator is fine)
+            var breakdown = (enableVat)
+                    ? line(unit, qty, pricesIncludeVat, ratePct) // net, vat, gross
+                    : new com.ipachi.pos.tax.TaxCalculator.Breakdown(lineBase, ZERO2, lineBase);
+
+            // profit based on NET (sell net - buy)
+            BigDecimal unitNet = breakdown.net().divide(BigDecimal.valueOf(Math.max(qty, 1)), 2, RoundingMode.HALF_UP);
+            BigDecimal profit  = unitNet.subtract(buy).multiply(BigDecimal.valueOf(qty)).setScale(2, RoundingMode.HALF_UP);
+
+            TransactionLine line = TransactionLine.builder()
+                    .transaction(tx)
+                    .sku(item.getSku())
+                    .name(item.getName() != null ? item.getName() : item.getSku())
+                    .unitPrice(unit)
+                    .qty(qty)
+                    .lineTotal(lineBase)          // legacy
+                    .netAmount(breakdown.net())
+                    .vatAmount(breakdown.vat())
+                    .grossAmount(breakdown.gross())
+                    .vatRateApplied(enableVat ? ratePct : BigDecimal.ZERO)
+                    .profit(profit)
+                    .remainingStock(BigDecimal.ZERO)
+                    .businessId(businessId)
+                    .createdByUserId(userId)
+                    .userId(userId)
+                    .createdAt(OffsetDateTime.now())
+                    .updatedAt(OffsetDateTime.now())
+                    .build();
+
+            TransactionLine saved = lineRepo.save(line);
+
+            if (qty > 0) {
+                updateStockForSale(item.getSku(), qty, "TX-" + tx.getId(), businessId, userId);
+                BigDecimal after = getCurrentStockLevel(product.getId(), businessId);
+                saved.setRemainingStock(after);
+                saved.setUpdatedAt(OffsetDateTime.now());
+                saved = lineRepo.save(saved);
             }
+
+            sumNet   = sumNet.add(breakdown.net()).setScale(2, RoundingMode.HALF_UP);
+            sumVat   = sumVat.add(breakdown.vat()).setScale(2, RoundingMode.HALF_UP);
+            sumGross = sumGross.add(breakdown.gross()).setScale(2, RoundingMode.HALF_UP);
+
+            savedLines.add(saved);
         }
 
-        // 4) Update transaction timestamp
-        tx.setUpdatedAt(OffsetDateTime.now());
-        txRepo.save(tx);
+        // 3) Update header totals and save again
+        tx.setSubtotalNet(sumNet);
+        tx.setTotalVat(sumVat);
+        tx.setTotalGross(sumGross);
+        tx.setTotal(sumGross); // keep legacy total aligned with gross
 
-        log.info("Completed checkout - Transaction ID: {}, Total: {}, Lines: {}, User: {}",
-                tx.getId(), total, savedLines.size(), userId);
+        tx.setUpdatedAt(OffsetDateTime.now());
+        tx = txRepo.save(tx);
+
+        log.info("Checkout complete - txId: {}, net: {}, vat: {}, gross: {}, lines: {}, business: {}, user: {}",
+                tx.getId(), tx.getSubtotalNet(), tx.getTotalVat(), tx.getTotalGross(),
+                savedLines.size(), businessId, userId);
 
         return tx;
     }
 
-    /**
-     * Create and save a transaction line item, and update inventory via stock movement
-     */
-    private TransactionLine createAndSaveLineItem(Transaction tx, TillItem item, Long userId) {
-        BigDecimal unit = safe(BigDecimal.valueOf(item.getPrice()));
-        int qty = item.getQty() == 0 ? 0 : item.getQty();
-        BigDecimal lineTotal = unit.multiply(BigDecimal.valueOf(qty));
+    // ... updateStockForSale(), getCurrentStockLevel() unchanged ...
 
-        // Create line item
+    /** Create & save a transaction line, then deduct stock via negative movement. */
+    /** Create & save a transaction line, then deduct stock via negative movement. */
+    private TransactionLine createAndSaveLineItem(Transaction tx, TillItem item, Long businessId, Long userId) {
+                BigDecimal unit = safe(BigDecimal.valueOf(item.getPrice()));
+                int qty = Math.max(0, item.getQty());
+                BigDecimal qtyBD = BigDecimal.valueOf(qty);
+                BigDecimal lineTotal = unit.multiply(qtyBD);
+        
+                        // Resolve product to compute profit and to read stock later
+                                var product = productRepo.findBySkuIgnoreCaseAndBusinessId(item.getSku().trim(), businessId)
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                        "Product not found for SKU in this business"));
+                BigDecimal buy = safe(product.getBuyPrice());
+                BigDecimal profit = unit.subtract(buy).multiply(qtyBD);
+
         TransactionLine line = TransactionLine.builder()
                 .transaction(tx)
                 .sku(item.getSku())
@@ -100,127 +193,84 @@ public class CheckoutService {
                 .unitPrice(unit)
                 .qty(qty)
                 .lineTotal(lineTotal)
+                                .profit(profit)
+                                .remainingStock(BigDecimal.ZERO) // will be updated after stock movement
+                .businessId(businessId)         // owner
+                .createdByUserId(userId)        // who added the line
                 .userId(userId)
                 .createdAt(OffsetDateTime.now())
                 .updatedAt(OffsetDateTime.now())
                 .build();
 
-        // Save line item
-        TransactionLine savedLine = lineRepo.save(line);
-        log.debug("Saved transaction line ID: {} for transaction: {}", savedLine.getId(), tx.getId());
+                TransactionLine savedLine = lineRepo.save(line);
 
-        // Update inventory via stock movement (negative delta for sales)
         if (qty > 0) {
-            updateStockForSale(item.getSku(), qty, "Sale - TX-" + tx.getId(), userId);
+            updateStockForSale(item.getSku(), qty, "TX-" + tx.getId(), businessId, userId);
+                        // compute remaining stock after deduction
+                                BigDecimal after = getCurrentStockLevel(product.getId(), businessId);
+                        savedLine.setRemainingStock(after);
+                        savedLine.setUpdatedAt(OffsetDateTime.now());
+                        savedLine = lineRepo.save(savedLine);
         }
 
         return savedLine;
     }
 
-    /**
-     * Update stock for a sale by creating a negative stock movement
-     */
-    /**
-     * Update stock for a sale by creating a negative stock movement
-     */
+    /** Create a negative stock movement for a sale (business-scoped). */
     @Transactional
-    public void updateStockForSale(String sku, int quantityToDeduct, String reference, Long userId) {
-        if (sku == null || sku.trim().isEmpty() || quantityToDeduct <= 0) {
-            log.debug("Skipping stock update - invalid SKU or zero quantity: sku={}, qty={}", sku, quantityToDeduct);
+    public void updateStockForSale(String sku, int quantityToDeduct, String reference, Long businessId, Long userId) {
+        if (sku == null || sku.isBlank() || quantityToDeduct <= 0) {
+            log.debug("Skipping stock update (invalid input) sku={}, qty={}", sku, quantityToDeduct);
             return;
         }
 
-        try {
-            // 1) Find the product by SKU
-            Product product = productRepo.findBySkuIgnoreCaseAndUserId(sku, userId)
-                    .orElseGet(() -> {
-                        log.warn("Product not found for SKU: {}", sku);
-                        return null;
-                    });
+        // 1) Resolve product in this business
+        Product product = productRepo.findBySkuIgnoreCaseAndBusinessId(sku.trim(), businessId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found for SKU in this business"));
 
-            if (product == null) {
-                log.warn("Cannot update stock - product not found for SKU: {}", sku);
-                return;
-            }
-
-            // Verify user ownership
-            if (!product.getUserId().equals(userId)) {
-                log.warn("User {} cannot access product {} owned by user {}", userId, sku, product.getUserId());
-                return;
-            }
-
-            // 2) Get current stock level
-            BigDecimal currentStock = getCurrentStockLevel(product.getId(), userId);
-            log.debug("Current stock for SKU {} (product ID {}): {}", sku, product.getId(), currentStock);
-
-            // 3) Check for sufficient stock
-            if (currentStock.compareTo(BigDecimal.valueOf(quantityToDeduct)) < 0) {
-                log.warn("Insufficient stock for SKU {}: requested={}, available={}",
-                        sku, quantityToDeduct, currentStock);
-                throw new RuntimeException(String.format(
-                        "Insufficient stock for %s: requested %d, available %.4f",
-                        product.getName(), quantityToDeduct, currentStock.doubleValue()));
-            }
-
-            // 4) Create negative stock movement for sale - FIXED FORMAT STRING
-            StockMovement saleMovement = StockMovement.builder()
-                    .product(product)
-                    .quantityDelta(BigDecimal.valueOf(quantityToDeduct).negate()) // Negative for sales
-                    .note(String.format("Sale - %s (TX-%s)", reference, reference)) // FIXED: %s for both
-                    .userId(userId)
-                    .createdAt(OffsetDateTime.now())
-                    .build();
-
-            StockMovement savedMovement = stockRepo.saveAndFlush(saleMovement);
-
-            // 5) Verify the update
-            BigDecimal newStock = getCurrentStockLevel(product.getId(), userId);
-
-            log.info("Stock updated for SKU {}: {} -> {} (deducted {}, movement ID: {})",
-                    sku, currentStock, newStock, quantityToDeduct, savedMovement.getId());
-
-        } catch (Exception e) {
-            log.error("Failed to update stock for sale - SKU {}: {}", sku, e.getMessage(), e);
-            throw new RuntimeException("Stock update failed for SKU: " + sku + " - " + e.getMessage(), e);
+        // 2) Check current stock for this business
+        BigDecimal current = getCurrentStockLevel(product.getId(), businessId);
+        if (current.compareTo(BigDecimal.valueOf(quantityToDeduct)) < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Insufficient stock for %s: requested %d, available %.4f"
+                            .formatted(product.getName(), quantityToDeduct, current));
         }
-    }
-    /**
-     * Get current stock level for a product by summing all stock movements
-     */
-    public BigDecimal getCurrentStockLevel(Long productId, Long userId) {
-        try {
-            // Use the user-specific query if available, otherwise fallback to general query
-            BigDecimal stockLevel = stockRepo.sumByProductIdAndUserId(productId, userId);
-            return stockLevel != null ? stockLevel : BigDecimal.ZERO;
-        } catch (Exception e) {
-            log.warn("Failed to calculate stock level for product {}: {}", productId, e.getMessage());
-            return BigDecimal.ZERO;
-        }
+
+        // 3) Record sale movement (negative delta) with audit stamps
+        StockMovement mv = StockMovement.builder()
+                .businessId(businessId)
+                .createdByUserId(userId)
+                .userId(userId)
+                .terminalId(term())
+                .product(product)
+                .quantityDelta(BigDecimal.valueOf(quantityToDeduct).negate())
+                .note("Sale - " +  reference)
+                .createdAt(OffsetDateTime.now())
+                .build();
+
+        stockRepo.saveAndFlush(mv);
+
+        BigDecimal after = getCurrentStockLevel(product.getId(), businessId);
+        log.info("Stock updated (sale) sku={}, before={}, after={}, deducted={}, biz={}",
+                sku, current, after, quantityToDeduct, businessId);
     }
 
-    /**
-     * Get current stock level for a product using native query (fallback)
-     */
+    /** Sum movements for a product within a business. */
+    public BigDecimal getCurrentStockLevel(Long productId, Long businessId) {
+        BigDecimal v = stockRepo.sumByProductIdAndBusinessId(productId, businessId);
+        return v == null ? BigDecimal.ZERO : v;
+    }
 
-    /**
-     * Helper method to calculate total from items
-     */
     private BigDecimal calculateTotal(List<TillItem> items) {
-        if (items == null || items.isEmpty()) {
-            return BigDecimal.ZERO;
-        }
-
+        if (items == null || items.isEmpty()) return BigDecimal.ZERO;
         BigDecimal total = BigDecimal.ZERO;
         for (TillItem it : items) {
             BigDecimal unit = safe(BigDecimal.valueOf(it.getPrice()));
-            int qty = it.getQty() == 0 ? 0 : it.getQty();
-            BigDecimal lineTotal = unit.multiply(BigDecimal.valueOf(qty));
-            total = total.add(lineTotal);
+            int qty = Math.max(0, it.getQty());
+            total = total.add(unit.multiply(BigDecimal.valueOf(qty)));
         }
         return total;
     }
 
-    private static BigDecimal safe(BigDecimal v) {
-        return v == null ? BigDecimal.ZERO : v;
-    }
+    private static BigDecimal safe(BigDecimal v) { return v == null ? BigDecimal.ZERO : v; }
 }

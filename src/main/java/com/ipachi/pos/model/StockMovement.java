@@ -19,6 +19,18 @@ public class StockMovement extends BaseOwnedEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // NEW: business scope for movements (aligns with Product.businessId)
+    @Column(name = "business_id", nullable = false)
+    private Long businessId;
+
+    // NEW: who performed the movement
+    @Column(name = "created_by_user_id", nullable = false)
+    private Long createdByUserId;
+
+    // NEW: optional for terminal audit
+    @Column(name = "terminal_id")
+    private Long terminalId;
+
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id")
     private Product product;
@@ -32,5 +44,8 @@ public class StockMovement extends BaseOwnedEntity {
 
     private String note;
 
-
+    // helpful for “recent” queries
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false)
+    private OffsetDateTime createdAt;
 }

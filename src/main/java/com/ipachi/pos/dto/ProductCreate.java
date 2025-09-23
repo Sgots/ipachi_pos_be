@@ -13,7 +13,7 @@ public record ProductCreate(
         Long unitId,
         ProductType productType,       // SINGLE/RECIPE
         ProductSaleMode saleMode,      // PER_UNIT/BY_WEIGHT
-        String lifetime,               // nullable
+        Integer lifetime,               // nullable
         Integer lowStock,              // nullable
         List<ProductComponentCreate> components // for RECIPE
 ) {}

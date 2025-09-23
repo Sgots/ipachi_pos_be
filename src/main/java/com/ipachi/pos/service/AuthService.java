@@ -39,12 +39,12 @@ public class AuthService {
                 // Fire a domain event so a default Terminal is created & linked to this user
                         events.publishEvent(new UserCreatedEvent(user.getId()));
         String token = jwt.generateToken(user.getUsername());
-        return new AuthResponse(token, user.getUsername(), user.getRole().name());
+        return new AuthResponse(token, user.getUsername(), user.getRole().name(), user.getBusinessProfileId(), user.getTerminalId());
     }
 
     public AuthResponse login(LoginRequest req) {
         authManager.authenticate(new UsernamePasswordAuthenticationToken(req.username(), req.password()));
         User user = users.findByUsername(req.username()).orElseThrow();
-        return new AuthResponse(jwt.generateToken(user.getUsername()), user.getUsername(), user.getRole().name());
+        return new AuthResponse(jwt.generateToken(user.getUsername()), user.getUsername(), user.getRole().name(), user.getBusinessProfileId(), user.getTerminalId());
     }
 }

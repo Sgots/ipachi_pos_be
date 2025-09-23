@@ -1,72 +1,85 @@
 package com.ipachi.pos.repo;
 
-import com.ipachi.pos.model.Product;
 import com.ipachi.pos.model.StockMovement;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
 public interface StockMovementRepository extends JpaRepository<StockMovement, Long> {
-    @Query("SELECT p FROM Product p WHERE p.userId = :userId ORDER BY p.name ASC")
-    List<Product> findByUserIdOrderByNameAsc(@Param("userId") Long userId);
+    @Query("""
+      select coalesce(sum(m.quantityDelta), 0)
+      from StockMovement m
+      where m.product.id = :productId and m.businessId = :biz and m.createdAt <= :ts
+    """)
+    BigDecimal sumQtyUpTo(Long productId, Long biz, OffsetDateTime ts);
 
-    @Query("SELECT p FROM Product p WHERE p.userId = :userId AND " +
-            "(LOWER(p.name) LIKE LOWER(CONCAT('%', :name, '%')) OR " +
-            "LOWER(p.sku) LIKE LOWER(CONCAT('%', :sku, '%')) OR " +
-            "LOWER(p.barcode) LIKE LOWER(CONCAT('%', :barcode, '%')))")
-    Page<Product> findByNameContainingIgnoreCaseOrSkuContainingIgnoreCaseOrBarcodeContainingIgnoreCaseAndUserId(
-            @Param("name") String name,
-            @Param("sku") String sku,
-            @Param("barcode") String barcode,
-            @Param("userId") Long userId,
-            Pageable pageable
-    );
+    // purchases in period (positive deltas × buyPrice) aggregated over all products
+    @Query("""
+      select coalesce(sum( case when m.quantityDelta > 0 then m.quantityDelta * p.buyPrice else 0 end ), 0)
+      from StockMovement m
+      join m.product p
+      where m.businessId = :biz and m.createdAt between :start and :end
+    """)
+    BigDecimal purchasesValue(Long biz, OffsetDateTime start, OffsetDateTime end);
 
-    /**
-     * Sum quantity for a specific product and user (NEW: with userId filter)
-     */
-    @Query("SELECT COALESCE(SUM(m.quantityDelta), 0) FROM StockMovement m " +
-            "JOIN m.product p WHERE p.id = :productId AND m.userId = :userId")
-    BigDecimal sumByProductIdAndUserId(@Param("productId") Long productId, @Param("userId") Long userId);
+    /* ========= AGGREGATIONS (BUSINESS SCOPED) ========= */
 
     /**
-     * Alternative native query for stock calculation
+     * Sum quantity for a specific product within a business.
      */
-    @Query(value = """
-        SELECT COALESCE(SUM(sm.quantity_delta), 0) 
-        FROM inv_stock_movements sm 
-        JOIN inv_products p ON sm.product_id = p.id 
-        WHERE sm.product_id = :productId AND p.user_id = :userId
-        """, nativeQuery = true)
-    BigDecimal sumStockByProductIdNative(@Param("productId") Long productId, @Param("userId") Long userId);
+    @Query("""
+           SELECT COALESCE(SUM(m.quantityDelta), 0)
+           FROM StockMovement m
+           WHERE m.product.id = :productId AND m.businessId = :businessId
+           """)
+    BigDecimal sumByProductIdAndBusinessId(@Param("productId") Long productId,
+                                           @Param("businessId") Long businessId);
 
-    List<StockMovement> findByUserId(Long userId);
-    Optional<StockMovement> findByIdAndUserId(Long id, Long userId);
-
-    @Query("select coalesce(sum(m.quantityDelta),0) " +
-            "from StockMovement m where m.product.id = :productId")
-    BigDecimal sumByProductId(@Param("productId") Long productId);
-
-    @Query("select m.product.id, coalesce(sum(m.quantityDelta),0) " +
-            "from StockMovement m group by m.product.id")
-    List<Object[]> totalsByProduct();
-
+    /**
+     * Bulk totals for all products within a business (native for speed).
+     * Returns rows: [product_id, qty]
+     */
     @Query(value = """
         SELECT p.id AS product_id, COALESCE(SUM(sm.quantity_delta), 0) AS qty
         FROM inv_stock_movements sm
         JOIN inv_products p ON sm.product_id = p.id
-        WHERE p.user_id = :userId
+        WHERE sm.business_id = :businessId
         GROUP BY p.id
         """, nativeQuery = true)
-    List<Object[]> totalsByProductIdAndUserId(@Param("userId") Long userId);
+    List<Object[]> totalsByProductIdAndBusinessId(@Param("businessId") Long businessId);
 
-    // NEW: Find recent movements for a product
-    @Query("SELECT m FROM StockMovement m JOIN m.product p WHERE p.sku = :sku AND m.userId = :userId ORDER BY m.createdAt DESC")
-    List<StockMovement> findRecentByProductSku(@Param("sku") String sku, @Param("userId") Long userId, Pageable pageable);
+    /* ========= LOOKUPS (BUSINESS SCOPED) ========= */
+
+    /**
+     * Recent movements for a product identified by SKU within a business.
+     */
+    @Query("""
+        SELECT m FROM StockMovement m
+        JOIN m.product p
+        WHERE p.sku = :sku AND m.businessId = :businessId
+        ORDER BY m.createdAt DESC
+        """)
+    List<StockMovement> findRecentByProductSkuAndBusinessId(@Param("sku") String sku,
+                                                            @Param("businessId") Long businessId,
+                                                            Pageable pageable);
+
+    /* ========= LEGACY (USER-SCOPED) — keep temporarily if needed ========= */
+    // Prefer the business-scoped methods above. These can be deleted after refactor.
+    @Deprecated
+    @Query("select coalesce(sum(m.quantityDelta),0) from StockMovement m where m.product.id = :productId")
+    BigDecimal sumByProductId(@Param("productId") Long productId);
+
+    @Deprecated
+    @Query("select m.product.id, coalesce(sum(m.quantityDelta),0) from StockMovement m group by m.product.id")
+    List<Object[]> totalsByProduct();
+
+    // Basic accessors (still okay)
+    List<StockMovement> findByBusinessId(Long businessId);
+    Optional<StockMovement> findByIdAndBusinessId(Long id, Long businessId);
 }

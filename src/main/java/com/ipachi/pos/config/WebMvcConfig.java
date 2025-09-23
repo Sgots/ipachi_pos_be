@@ -26,11 +26,12 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/api/auth/**",
                         "/api/users/setup",
                         "/api/public/**",
+                        "/api/users/**",
+                        "/api/me/permissions",
                         "/api/health",
+                        "/api/transactions/lines",
                         "/api/metrics",
                         "/api/user-profile/picture/file/**",
-                        "/api/user-profile/id-doc/file/**",
-                        "/api/business-profile/logo/file/**"
-                );
+                        "/api/user-profile/id-doc/file/**");
     }
 }

@@ -14,7 +14,7 @@ public record ProductUpdate(
         Long unitId,
         ProductType productType,
         ProductSaleMode saleMode,
-        String lifetime,
+        Integer lifetime,
         Integer lowStock,
         List<ProductComponentCreate> components
 ) {}

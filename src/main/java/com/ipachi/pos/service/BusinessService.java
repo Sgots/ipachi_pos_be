@@ -21,9 +21,8 @@ public class BusinessService {
     private CurrentRequest currentRequest;
 
     public BusinessProfile getBusinessProfile(Long userId) {
-        User user = userRepository.findById(userId).orElse(null);
-        if (user == null) return null;
-        return businessProfileRepository.findByUser(user).orElse(null);
+
+        return businessProfileRepository.findById(userId).orElse(null);
     }
 
     public void updateBusinessProfile(Long userId, BusinessProfile updatedProfile) {

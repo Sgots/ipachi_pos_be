@@ -1,57 +1,50 @@
+// src/main/java/com/ipachi/pos/repo/MeasurementUnitRepository.java
 package com.ipachi.pos.repo;
-
-// src/main/java/com/ipachi/pos/inventory/repo/MeasurementUnitRepository.java
 
 import com.ipachi.pos.model.MeasurementUnit;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
 
 public interface MeasurementUnitRepository extends JpaRepository<MeasurementUnit, Long> {
-    // Add these methods to MeasurementUnitRepository
-    @Query("SELECT COUNT(u) > 0 FROM MeasurementUnit u WHERE LOWER(u.name) = LOWER(:name) AND u.userId = :userId")
-    boolean existsByNameIgnoreCaseAndUserId(@Param("name") String name, @Param("userId") Long userId);
 
-    @Query("SELECT COUNT(u) > 0 FROM MeasurementUnit u WHERE LOWER(u.abbr) = LOWER(:abbr) AND u.userId = :userId")
-    boolean existsByAbbrIgnoreCaseAndUserId(@Param("abbr") String abbr, @Param("userId") Long userId);
+    @Query("SELECT COUNT(u) > 0 FROM MeasurementUnit u WHERE LOWER(u.name) = LOWER(:name) AND u.businessId = :businessId")
+    boolean existsByNameIgnoreCaseAndBusinessId(@Param("name") String name, @Param("businessId") Long businessId);
 
-    @Query("SELECT COUNT(u) > 0 FROM MeasurementUnit u WHERE LOWER(u.name) = LOWER(:name) AND u.userId = :userId AND u.id != :id")
-    boolean existsByNameIgnoreCaseAndUserIdAndIdNot(@Param("name") String name, @Param("userId") Long userId, @Param("id") Long id);
+    @Query("SELECT COUNT(u) > 0 FROM MeasurementUnit u WHERE LOWER(u.abbr) = LOWER(:abbr) AND u.businessId = :businessId")
+    boolean existsByAbbrIgnoreCaseAndBusinessId(@Param("abbr") String abbr, @Param("businessId") Long businessId);
 
-    @Query("SELECT COUNT(u) > 0 FROM MeasurementUnit u WHERE LOWER(u.abbr) = LOWER(:abbr) AND u.userId = :userId AND u.id != :id")
-    boolean existsByAbbrIgnoreCaseAndUserIdAndIdNot(@Param("abbr") String abbr, @Param("userId") Long userId, @Param("id") Long id);
+    @Query("SELECT COUNT(u) > 0 FROM MeasurementUnit u WHERE LOWER(u.name) = LOWER(:name) AND u.businessId = :businessId AND u.id != :id")
+    boolean existsByNameIgnoreCaseAndBusinessIdAndIdNot(@Param("name") String name, @Param("businessId") Long businessId, @Param("id") Long id);
 
+    @Query("SELECT COUNT(u) > 0 FROM MeasurementUnit u WHERE LOWER(u.abbr) = LOWER(:abbr) AND u.businessId = :businessId AND u.id != :id")
+    boolean existsByAbbrIgnoreCaseAndBusinessIdAndIdNot(@Param("abbr") String abbr, @Param("businessId") Long businessId, @Param("id") Long id);
 
-    @Query("SELECT COUNT(u) > 0 FROM MeasurementUnit u WHERE u.id = :id AND u.userId = :userId")
-    boolean existsByIdAndUserId(@Param("id") Long id, @Param("userId") Long userId);
+    @Query("SELECT COUNT(u) > 0 FROM MeasurementUnit u WHERE u.id = :id AND u.businessId = :businessId")
+    boolean existsByIdAndBusinessId(@Param("id") Long id, @Param("businessId") Long businessId);
 
-    @Query("SELECT u FROM MeasurementUnit u WHERE u.userId = :userId")
-    Page<MeasurementUnit> findByUserId(@Param("userId") Long userId, Pageable pageable);
+    @Query("SELECT u FROM MeasurementUnit u WHERE u.businessId = :businessId")
+    Page<MeasurementUnit> findByBusinessId(@Param("businessId") Long businessId, Pageable pageable);
 
-    @Query("SELECT u FROM MeasurementUnit u WHERE u.userId = :userId ORDER BY u.name ASC")
-    List<MeasurementUnit> findByUserIdOrderByNameAsc(@Param("userId") Long userId);
+    @Query("SELECT u FROM MeasurementUnit u WHERE u.businessId = :businessId ORDER BY u.name ASC")
+    List<MeasurementUnit> findByBusinessIdOrderByNameAsc(@Param("businessId") Long businessId);
 
-    @Query("SELECT u FROM MeasurementUnit u WHERE u.userId = :userId AND " +
-            "(LOWER(u.name) LIKE LOWER(CONCAT('%', :name, '%')) OR " +
-            "LOWER(u.abbr) LIKE LOWER(CONCAT('%', :abbr, '%')))")
-    Page<MeasurementUnit> findByNameContainingIgnoreCaseOrAbbrContainingIgnoreCaseAndUserId(
+    @Query("""
+           SELECT u FROM MeasurementUnit u
+           WHERE u.businessId = :businessId AND
+           (LOWER(u.name) LIKE LOWER(CONCAT('%', :name, '%'))
+            OR LOWER(u.abbr) LIKE LOWER(CONCAT('%', :abbr, '%')))
+           """)
+    Page<MeasurementUnit> findByNameContainingIgnoreCaseOrAbbrContainingIgnoreCaseAndBusinessId(
             @Param("name") String name,
             @Param("abbr") String abbr,
-            @Param("userId") Long userId,
+            @Param("businessId") Long businessId,
             Pageable pageable
     );
-    boolean existsByNameIgnoreCase(String name);
-    boolean existsByAbbrIgnoreCase(String abbr);
-    boolean existsByNameIgnoreCaseAndIdNot(String name, Long id);
-    boolean existsByAbbrIgnoreCaseAndIdNot(String abbr, Long id);
-    List<MeasurementUnit> findByUserId(Long userId);
-    Optional<MeasurementUnit> findByIdAndUserId(Long id, Long userId);
-    Page<MeasurementUnit> findByNameContainingIgnoreCaseOrAbbrContainingIgnoreCase(
-            String name, String abbr, Pageable pageable);
-}
 
+    Optional<MeasurementUnit> findByIdAndBusinessId(Long id, Long businessId);
+}

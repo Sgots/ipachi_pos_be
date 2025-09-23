@@ -1,3 +1,4 @@
+// src/main/java/com/ipachi/pos/service/NewUserSetupService.java
 package com.ipachi.pos.service;
 
 import com.ipachi.pos.dto.NewUserSetupRequest;
@@ -14,7 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional; // Fixed import
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
@@ -26,7 +27,6 @@ import lombok.RequiredArgsConstructor;
 public class NewUserSetupService {
     private static final Logger log = LoggerFactory.getLogger(NewUserSetupService.class);
 
-    // Move EntityManager declaration to the top with other fields
     @PersistenceContext
     private EntityManager entityManager;
 
@@ -51,7 +51,6 @@ public class NewUserSetupService {
             throw new IllegalStateException("User ID is null. Ensure the user is persisted.");
         }
 
-        // Check if user is managed and reattach if necessary
         if (!entityManager.contains(user)) {
             log.info("User is detached, merging...");
             user = entityManager.merge(user);
@@ -59,7 +58,6 @@ public class NewUserSetupService {
         }
 
         entityManager.flush(); // Ensure User is synchronized
-
 
         FileAsset pic = storage.save(picture, user.getId());
         FileAsset idd = storage.save(idDoc, user.getId());
@@ -73,7 +71,6 @@ public class NewUserSetupService {
                     return UserProfile.builder().user(finalUser).build();
                 });
 
-        // Ensure user is set (redundant but safe)
         if (profile.getUser() == null) {
             profile.setUser(user);
             log.info("Explicitly set user in existing profile");
@@ -96,7 +93,6 @@ public class NewUserSetupService {
 
         log.info("UserProfile User ID before save: {}", profile.getUser() != null ? profile.getUser().getId() : "null");
 
-        // Use saveAndFlush for immediate persistence and error detection
         try {
             UserProfile savedProfile = profiles.saveAndFlush(profile);
             log.info("Successfully saved UserProfile with ID: {}", savedProfile.getId());
@@ -126,6 +122,13 @@ public class NewUserSetupService {
         if (logo != null) biz.setLogoAsset(logo);
         businesses.save(biz);
 
+        // 3b) Stamp the business_profile_id on User (nullable -> now set)
+        if (user.getBusinessProfileId() == null || !biz.getId().equals(user.getBusinessProfileId())) {
+            user.setBusinessProfileId(biz.getId());
+            users.save(user); // user is managed; this is safe & explicit
+            log.info("Updated user {} with business_profile_id={}", user.getId(), biz.getId());
+        }
+
         // 4) Build response
         return new NewUserSetupResponse(
                 new NewUserSetupResponse.Profile(
@@ -151,14 +154,12 @@ public class NewUserSetupService {
         );
     }
 
-    // Fixed read method - missing closing brace
     @Transactional(readOnly = true)
     public NewUserSetupResponse read(String username) {
         User user = users.findByUsername(username).orElseThrow();
         var p = profiles.findByUser(user).orElse(null);
         var b = businesses.findByUser(user).orElse(null);
 
-        // Resolve file URLs from DB assets first, fall back to legacy URL strings if present
         String pictureUrl = null;
         String idDocUrl = null;
         String logoUrl = null;
