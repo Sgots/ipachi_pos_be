@@ -22,10 +22,12 @@ C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\jav
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\repo\ProductRepository.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\dto\StaffCreateResponse.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\dto\reports\KeyAmount.java
+C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\security\Action.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\model\IdType.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\model\UserProfile.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\repo\ProductComponentRepository.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\repo\StaffMemberRepository.java
+C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\dto\CombinedTxnDto.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\dto\CheckoutRequest.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\dto\ReceiptFileView.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\service\ProductService.java
@@ -51,6 +53,7 @@ C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\jav
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\model\TillSession.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\dto\RestockRequest.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\service\UserService.java
+C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\security\HeaderAuthFilter.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\dto\reports\DashboardKpis.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\service\CategoryService.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\model\UserRole.java
@@ -66,12 +69,15 @@ C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\jav
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\dto\RestockResponse.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\controller\TerminalController.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\controller\MeasurementController.java
+C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\security\AuthzUtil.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\controller\ReportsController.java
+C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\dto\TaxCalculator.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\controller\StockController.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\dto\ProductType.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\controller\TransactionController.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\dto\CashMovementType.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\dto\CloseTillRequest.java
+C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\dto\reports\ProductQtyProfitView.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\dto\StockReceiptDto.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\model\MeasurementUnit.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\service\NewUserSetupService.java
@@ -120,6 +126,7 @@ C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\jav
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\model\Settings.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\dto\NewUserSetupResponse.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\dto\ProductDto.java
+C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\controller\SettingsController.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\dto\PromoItemDto.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\model\Transaction.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\model\CashMovement.java
@@ -133,6 +140,7 @@ C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\jav
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\model\FileAsset.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\dto\StaffCreate.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\repo\InventoryItemRepository.java
+C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\dto\TaxCategory.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\dto\OpenTillRequest.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\dto\ProductCreate.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\dto\TillItem.java
@@ -142,6 +150,7 @@ C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\jav
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\model\Subscription.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\security\JwtAuthFilter.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\service\StockService.java
+C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\controller\MeController.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\dto\reports\TradeAccountStatement.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\service\RoleService.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\security\CurrentRequest.java
@@ -159,6 +168,7 @@ C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\jav
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\dto\CategoryCreate.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\controller\ProductController.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\repo\TerminalRepository.java
+C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\dto\reports\ProductQtyProfitRow.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\model\BaseOwnedEntity.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\service\AuthService.java
 C:\Users\nonofoS\IdeaProjects\ipachi-pos-backend\ipachi-pos-backend\src\main\java\com\ipachi\pos\dto\LoginRequest.java

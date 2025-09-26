@@ -11,6 +11,8 @@ import java.util.Optional;
 
 public interface StaffMemberRepository extends JpaRepository<StaffMember, Long> {
     List<StaffMember> findByBusinessIdOrderByIdAsc(Long businessId);
+    Optional<StaffMember> findByUserId(Long userId);
+
     Optional<StaffMember> findByIdAndBusinessId(Long id, Long businessId);
     @EntityGraph(attributePaths = {"role", "role.permissions"})
     Optional<StaffMember> findByUserIdAndBusinessId(Long userId, Long businessId);

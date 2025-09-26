@@ -9,5 +9,6 @@ import java.util.Optional;
 
 public interface BusinessProfileRepository extends JpaRepository<BusinessProfile, Long> {
     Optional<BusinessProfile> findByUser(User user);
+
     boolean existsByUser(User user);
 }

@@ -1,20 +1,21 @@
 package com.ipachi.pos.service;
 
-// ... imports ...
 import com.ipachi.pos.dto.ReceiptFileView;
 import com.ipachi.pos.dto.StockReceiptDto;
 import com.ipachi.pos.model.StockReceipt;
 import com.ipachi.pos.repo.StockReceiptRepository;
 import com.ipachi.pos.security.CurrentRequest;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
-import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 @Slf4j
@@ -30,11 +31,17 @@ public class StockReceiptService {
         return v;
     }
 
+    private Long requireUser() {
+        Long userId = ctx.getUserId();
+        if (userId == null) throw new IllegalStateException("User ID not found in request headers");
+        return userId;
+    }
+
     public List<StockReceiptDto> search(String q) {
         Long businessId = requireBusiness();
 
         var list = (q == null || q.isBlank())
-                ? repo.findTop50ByBusinessIdOrderByCreatedAtDesc(businessId)
+                ? repo.findTop50ByBusinessIdOrderByReceiptAtDescCreatedAtDesc(businessId)
                 : repo.searchByBusinessAndQuery(businessId, q.trim().toLowerCase());
 
         return list.stream().map(this::toDto).toList();
@@ -61,10 +68,18 @@ public class StockReceiptService {
                 e.getContentType(),
                 e.getFileSize(),
                 "/api/inventory/receipts/" + e.getId() + "/file",
-                e.getCreatedAt()
+                e.getCreatedAt(),
+                e.getReceiptAt()
         );
     }
-    public StockReceiptDto upload(String label, MultipartFile file) {
+
+    /**
+     * Upload a receipt and persist its effective "receipt date".
+     * @param label      user label/reference
+     * @param file       file contents
+     * @param receiptDay optional calendar day (LocalDate). If null, defaults to "today (UTC)".
+     */
+    public StockReceiptDto upload(String label, MultipartFile file, LocalDate receiptDay) {
         Long businessId = requireBusiness();
         Long userId = requireUser();
 
@@ -82,9 +97,12 @@ public class StockReceiptService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Could not read file");
         }
 
-        var now = OffsetDateTime.now();
+        // When not supplied, use "now" in UTC; otherwise use start-of-day UTC for the chosen date.
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        OffsetDateTime receiptAt = receiptDay == null
+                ? now
+                : receiptDay.atStartOfDay().atOffset(ZoneOffset.UTC);
 
-        // Build and save entity
         var entity = new StockReceipt();
         entity.setLabel(label.trim());
         entity.setFileName(file.getOriginalFilename());
@@ -95,17 +113,12 @@ public class StockReceiptService {
         entity.setUserId(userId);
         entity.setCreatedAt(now);
         entity.setUpdatedAt(now);
+        entity.setReceiptAt(receiptAt);
 
         entity = repo.save(entity);
-        log.info("Uploaded receipt {} ({} bytes) for business={}, user={}",
-                entity.getId(), entity.getFileSize(), businessId, userId);
+        log.info("Uploaded receipt {} ({} bytes) for business={}, user={}, receiptAt={}",
+                entity.getId(), entity.getFileSize(), businessId, userId, entity.getReceiptAt());
 
         return toDto(entity);
-    }
-
-    private Long requireUser() {
-        Long userId = ctx.getUserId();
-        if (userId == null) throw new IllegalStateException("User ID not found in request headers");
-        return userId;
     }
 }

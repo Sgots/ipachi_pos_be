@@ -10,11 +10,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -76,36 +80,59 @@ public class ReportsService {
 
 
     /** Cash-Up: per product — cash (buying price total) + profit. */
+    private static BigDecimal toBigDecimal(Number n) {
+        if (n == null) return BigDecimal.ZERO;
+        if (n instanceof BigDecimal bd) return bd;
+        if (n instanceof Long l) return BigDecimal.valueOf(l);
+        if (n instanceof Integer i) return BigDecimal.valueOf(i.longValue());
+        if (n instanceof Double d) return BigDecimal.valueOf(d);
+        if (n instanceof Float f) return BigDecimal.valueOf(f.doubleValue());
+        return new BigDecimal(n.toString());
+    }
+
     public List<CashUpRow> cashUpRows(OffsetDateTime start, OffsetDateTime end) {
-        Long b = biz();
-        // reuse salesByProduct to get product names, then compute cash & profit via JPQL in memory (simple way)
-        List<Product> products = productRepo.findByBusinessId(b);
-        var perProduct = lineRepo.salesByProduct(b, start, end);
+        Long bizId = biz();
+
+        var bySku = productRepo.findByBusinessId(bizId).stream()
+                .collect(Collectors.toMap(p -> p.getSku().toLowerCase(), Function.identity(), (a,b)->a));
+
+        var perProduct = lineRepo.qtyAndProfitByProduct(bizId, start, end);
+
         return perProduct.stream().map(row -> {
-            Product p = products.stream()
-                    .filter(pp -> pp.getSku().equalsIgnoreCase(row.getSku()))
-                    .findFirst().orElse(null);
-            BigDecimal buy = p == null ? BigDecimal.ZERO : nz(p.getBuyPrice());
-            // cash = buy * (Σ qty). We need Σ qty for that SKU
-            // quick JPQL alternative: compute Σ qty by (total / avgUnitPrice) — but better to query directly.
-            // To keep it simple & accurate, add another query or assume unitPrice constant per SKU in period.
-            // We’ll estimate qty = totalSales / p.sellPrice if sellPrice > 0; else qty=0.
-            BigDecimal qtyEstimate = BigDecimal.ZERO;
-            if (p != null && nz(p.getSellPrice()).compareTo(BigDecimal.ZERO) > 0) {
-                qtyEstimate = safeDiv(row.getTotal(), p.getSellPrice());
-            }
-            BigDecimal cash = buy.multiply(qtyEstimate);
-            // profit estimate = (sell - buy) * qty
-            BigDecimal profit = nz(p == null ? BigDecimal.ZERO : p.getSellPrice().subtract(buy)).multiply(qtyEstimate);
-            return new CashUpRow(row.getName(), cash, profit);
+            var p = bySku.getOrDefault(
+                    row.getSku() == null ? "" : row.getSku().toLowerCase(), null);
+
+            BigDecimal buyPrice = p != null ? nz(p.getBuyPrice()) : BigDecimal.ZERO;
+            BigDecimal qty      = nz(row.getQty());
+            BigDecimal profit   = nz(row.getProfit());
+
+            BigDecimal buyingCash     = buyPrice.multiply(qty);
+            BigDecimal effectiveTotal = buyingCash.add(profit);
+
+            return new CashUpRow(
+                    row.getName(),
+                    row.getSku(),
+                    scale2(buyingCash),
+                    scale2(profit),
+                    scale2(effectiveTotal)
+            );
         }).toList();
     }
 
+    private static BigDecimal nz(BigDecimal v) { return v == null ? BigDecimal.ZERO : v; }
+    private static BigDecimal scale2(BigDecimal v) { return nz(v).setScale(2, RoundingMode.HALF_UP); }
+
     public CashUpTotals cashUpTotals(List<CashUpRow> rows) {
-        BigDecimal totalCash = rows.stream().map(CashUpRow::getCash).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalProfit = rows.stream().map(CashUpRow::getProfit).reduce(BigDecimal.ZERO, BigDecimal::add);
-        return new CashUpTotals(totalCash, totalProfit, totalCash.add(totalProfit));
+        BigDecimal totalBuyingCash = rows.stream()
+                .map(CashUpRow::buyingCash).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalProfit = rows.stream()
+                .map(CashUpRow::profit).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal cashBalance = totalBuyingCash.add(totalProfit);
+
+        return new CashUpTotals(scale2(totalBuyingCash), scale2(totalProfit), scale2(cashBalance));
     }
+
+    // helpers
 
     /** Trade Account Statement. */
     @Transactional(readOnly = true)
@@ -141,7 +168,6 @@ public class ReportsService {
         return total;
     }
 
-    private static BigDecimal nz(BigDecimal v) { return v == null ? BigDecimal.ZERO : v; }
     private static BigDecimal toBig(Object v) { return v == null ? BigDecimal.ZERO : new BigDecimal(v.toString()); }
     private static BigDecimal safeDiv(BigDecimal a, BigDecimal b) {
         if (b == null || b.compareTo(BigDecimal.ZERO) == 0) return BigDecimal.ZERO;

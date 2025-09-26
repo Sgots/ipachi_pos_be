@@ -29,7 +29,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/api/users/**",
                         "/api/me/permissions",
                         "/api/health",
-                        "/api/transactions/lines",
+                        "/api/transactions/combined",
                         "/api/metrics",
                         "/api/user-profile/picture/file/**",
                         "/api/user-profile/id-doc/file/**");

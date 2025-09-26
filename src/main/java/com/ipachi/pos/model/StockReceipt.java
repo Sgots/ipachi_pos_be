@@ -4,11 +4,14 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 
+import java.time.OffsetDateTime;
+
 @Entity
 @Table(name = "inv_stock_receipt", indexes = {
         @Index(name = "idx_inv_receipt_label", columnList = "label"),
         @Index(name = "idx_inv_receipt_user_id", columnList = "user_id"),
-        @Index(name = "idx_inv_receipt_business_id", columnList = "business_id")
+        @Index(name = "idx_inv_receipt_business_id", columnList = "business_id"),
+        @Index(name = "idx_inv_receipt_at", columnList = "receipt_at")
 })
 @Getter
 @Setter
@@ -39,5 +42,7 @@ public class StockReceipt extends BaseOwnedEntity {
     @Column(name = "file_data", columnDefinition = "LONGBLOB")
     private byte[] data;
 
-    // createdAt/updatedAt and userId are inherited from BaseOwnedEntity
+    /** User-chosen date for the receipt (used for opening/closing stock calcs) */
+    @Column(name = "receipt_at", nullable = false)
+    private OffsetDateTime receiptAt;
 }

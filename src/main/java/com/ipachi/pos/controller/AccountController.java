@@ -22,6 +22,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -52,6 +53,92 @@ public class AccountController {
         }
         return ResponseEntity.notFound().build();
     }
+// ----------------------------
+// Uploads (multipart) — create/associate assets
+// ----------------------------
+
+    @PostMapping(value = "/user-profile/picture", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> uploadUserPicture(@RequestParam("file") MultipartFile file) {
+        Long userId = currentUserId();
+        if (userId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        try {
+            if (file.isEmpty()) return ResponseEntity.badRequest().body(Map.of("error", "Empty file"));
+
+            FileAsset asset = new FileAsset();
+            asset.setFilename(file.getOriginalFilename());
+            asset.setContentType(file.getContentType());
+            asset.setSize(file.getSize());
+            asset.setData(file.getBytes());
+            asset.setUserId(userId);
+
+            FileAsset saved = userService.createAndAssociatePictureAsset(userId, asset);
+
+            // respond with the same URL shape used in DTOs so UI refresh works instantly
+            Map<String, Object> resp = Map.of(
+                    "pictureUrl", "/api/user-profile/picture/file/" + saved.getId(),
+                    "pictureAssetId", saved.getId(),
+                    "hasPicture", true
+            );
+            return ResponseEntity.ok(resp);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Upload failed"));
+        }
+    }
+
+    @PostMapping(value = "/user-profile/id-doc", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> uploadUserIdDoc(@RequestParam("file") MultipartFile file) {
+        Long userId = currentUserId();
+        if (userId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        try {
+            if (file.isEmpty()) return ResponseEntity.badRequest().body(Map.of("error", "Empty file"));
+
+            FileAsset asset = new FileAsset();
+            asset.setFilename(file.getOriginalFilename());
+            asset.setContentType(file.getContentType());
+            asset.setSize(file.getSize());
+            asset.setData(file.getBytes());
+            asset.setUserId(userId);
+
+            FileAsset saved = userService.createAndAssociateIdDocAsset(userId, asset);
+
+            Map<String, Object> resp = Map.of(
+                    "idDocUrl", "/api/user-profile/id-doc/file/" + saved.getId(),
+                    "idDocAssetId", saved.getId(),
+                    "hasIdDoc", true
+            );
+            return ResponseEntity.ok(resp);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Upload failed"));
+        }
+    }
+
+    @PostMapping(value = "/business-profile/logo/file", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> uploadBusinessLogo(@RequestParam("file") MultipartFile file) {
+        Long userId = currentUserId();
+        if (userId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        try {
+            if (file.isEmpty()) return ResponseEntity.badRequest().body(Map.of("error", "Empty file"));
+
+            FileAsset asset = new FileAsset();
+            asset.setFilename(file.getOriginalFilename());
+            asset.setContentType(file.getContentType());
+            asset.setSize(file.getSize());
+            asset.setData(file.getBytes());
+            asset.setUserId(userId);
+
+            // NB: service associates to the user's BusinessProfile
+            FileAsset saved = businessService.createAndAssociateLogoAsset(userId, asset);
+
+            Map<String, Object> resp = Map.of(
+                    "logoUrl", "/api/business-profile/logo/file/" + saved.getId(),
+                    "logoAssetId", saved.getId(),
+                    "hasLogo", true
+            );
+            return ResponseEntity.ok(resp);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Upload failed"));
+        }
+    }
 
     @PutMapping("/user-profile")
     public ResponseEntity<String> updateUserProfile(@RequestBody UserProfile profile) {
@@ -69,10 +156,8 @@ public class AccountController {
     // ----------------------------
     @GetMapping("/business-profile")
     public ResponseEntity<?> getBusinessProfile() {
-        Long userId = currentUserId();
-        if (userId == null) {
-            return ResponseEntity.status(401).body(Map.of("error", "User not authenticated"));
-        }
+
+        Long userId = biz();
 
         BusinessProfile profile = businessService.getBusinessProfile(userId);
         if (profile != null) {
