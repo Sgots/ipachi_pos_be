@@ -46,7 +46,7 @@ public class ReportsService {
     public DashboardKpis dashboard(OffsetDateTime start, OffsetDateTime end) {
         Long b = biz();
         long customers = txRepo.countByBusinessIdAndCreatedAtBetween(b, start, end);
-        BigDecimal totalSales = nz(txRepo.sumTotal(b, start, end));
+        BigDecimal totalSales = nz(txRepo.sumTotalNet(b, start, end));
         BigDecimal overallProfit = nz(lineRepo.sumProfit(b, start, end));
 
         List<ProductSalesRow> perProduct = lineRepo.salesByProduct(b, start, end);
@@ -138,7 +138,7 @@ public class ReportsService {
     @Transactional(readOnly = true)
     public TradeAccountStatement tradeAccount(OffsetDateTime start, OffsetDateTime end) {
         Long b = biz();
-        BigDecimal sales = nz(txRepo.sumTotal(b, start, end));
+        BigDecimal sales = nz(txRepo.sumTotalNet(b, start, end));
 
         // Opening stock value (value at start minus 1ns)
         OffsetDateTime justBeforeStart = start.minusNanos(1);

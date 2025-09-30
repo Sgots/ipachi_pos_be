@@ -23,23 +23,76 @@ public class AuthService {
     private final AuthenticationManager authManager;
     private final JwtService jwt;
     private final ApplicationEventPublisher events;
-
+    private final OtpService otpService;
     @Transactional
     public AuthResponse register(RegisterRequest req) {
-        if (users.existsByUsername(req.username())) throw new IllegalArgumentException("Username taken");
-        if (users.existsByEmail(req.email())) throw new IllegalArgumentException("Email taken");
+        // 0) Basic shape checks
+        if (req == null) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "Missing request body");
+        }
+        if (req.username() == null || req.username().isBlank()) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "Username is required");
+        }
+        if (req.password() == null || req.password().isBlank()) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "Password is required");
+        }
+        if (req.areaCode() == null || req.areaCode().isBlank() || req.phone() == null || req.phone().isBlank()) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "Phone (areaCode + phone) is required");
+        }
+        if (req.otp() == null || req.otp().isBlank()) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "OTP is required");
+        }
+
+        // 1) Normalize MSISDN and verify OTP BEFORE any insert/update occurs
+        final String msisdn = normalizeMsisdn(req.areaCode(), req.phone()); // e.g. "+26774665135"
+        boolean otpOk = otpService.verifyAndConsume(msisdn, req.otp());     // must atomically ensure not re-usable
+        if (!otpOk) {
+            // Nothing persisted yet → safe to bail out
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "Invalid or expired OTP");
+        }
+
+        // 2) Only now do uniqueness checks (still read-only)
+        if (users.existsByUsernameIgnoreCase(req.username())) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.CONFLICT, "Username taken");
+        }
+        if (req.email() != null && !req.email().isBlank() && users.existsByEmail(req.email())) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.CONFLICT, "Email taken");
+        }
+
+        // 3) Create the user (first write happens AFTER OTP verification)
         User user = User.builder()
-                .username(req.username())
+                .username(req.username().trim())
                 .email(req.email())
                 .passwordHash(encoder.encode(req.password()))
                 .role(UserRole.ADMIN) // or STAFF; up to your flow
                 .enabled(true)
                 .build();
-        users.save(user);
-                // Fire a domain event so a default Terminal is created & linked to this user
-                        events.publishEvent(new UserCreatedEvent(user.getId()));
+
+        users.saveAndFlush(user);
+
+        // 4) Domain event (e.g., create default terminal, etc.)
+        events.publishEvent(new UserCreatedEvent(user.getId()));
+
+        // 5) JWT for immediate FE use (optional – you can also force re-login if preferred)
         String token = jwt.generateToken(user.getUsername());
-        return new AuthResponse(token, user.getUsername(), user.getRole().name(), user.getBusinessProfileId(), user.getTerminalId());
+        return new AuthResponse(token, user.getUsername(), user.getRole().name(),
+                user.getBusinessProfileId(), user.getTerminalId());
+    }
+
+    /** Minimal normalizer that ensures a single leading '+' and strips spaces/dashes. */
+    private static String normalizeMsisdn(String areaCode, String phone) {
+        String ac = areaCode.trim().replaceAll("[^\\d+]", "");
+        String pn = phone.trim().replaceAll("[^\\d]", "");
+        if (!ac.startsWith("+")) ac = "+" + ac;
+        return ac + pn;
     }
 
     public AuthResponse login(LoginRequest req) {

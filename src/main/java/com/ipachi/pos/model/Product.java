@@ -49,7 +49,15 @@ public class Product extends BaseOwnedEntity {
 
     @Column(length = 64)
     private String barcode;
+    @Lob @Basic(fetch = FetchType.LAZY)
+    @Column(name = "qr_code_data", columnDefinition = "MEDIUMBLOB")
+    private byte[] qrCodeData;
 
+    @Column(name="qr_code_type", length = 100)
+    private String qrContentType;
+
+    @Column(name="qr_code_name", length = 255)
+    private String qrFilename;
     @Column(nullable = false, length = 128)
     private String name;
 

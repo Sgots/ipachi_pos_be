@@ -9,6 +9,7 @@ import com.ipachi.pos.model.ProductComponent;
 import com.ipachi.pos.repo.*;
 import com.ipachi.pos.security.CurrentRequest;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -29,6 +30,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 @Transactional
 public class ProductService {
+    @Autowired
+    private QrService qrService;
 
     private final ProductRepository repo;
     private final CategoryRepository categories;
@@ -47,6 +50,21 @@ public class ProductService {
         Long id = ctx.getUserId();
         if (id == null) throw new IllegalStateException("User ID not found in request");
         return id;
+    }
+    // in the same service that has create()/update()
+
+    private void attachQrIfBarcodePresent(Product p) {
+        String code = p.getBarcode();
+        if (code == null || code.isBlank()) {
+            p.setQrCodeData(null);
+            p.setQrContentType(null);
+            p.setQrFilename(null);
+            return;
+        }
+        byte[] png = qrService.png(code, 512);
+        p.setQrCodeData(png);
+        p.setQrContentType("image/png");
+        p.setQrFilename((p.getSku() == null ? "product" : p.getSku()) + "_qr.png");
     }
 
     // ----------------- utils -----------------
@@ -143,6 +161,8 @@ public class ProductService {
                 .build();
 
         attachImageIfPresent(p, image);
+        // ⬇️ add this before first save OR right after save; either is fine
+        attachQrIfBarcodePresent(p);
         p = repo.save(p);
 
         if (isRecipe) {
@@ -227,6 +247,8 @@ public class ProductService {
         }
 
         if (image != null && !image.isEmpty()) attachImageIfPresent(p, image);
+        // ⬇️ add this before first save OR right after save; either is fine
+        attachQrIfBarcodePresent(p);
         p.setUpdatedAt(OffsetDateTime.now());
         p = repo.save(p);
         return toDto(p);

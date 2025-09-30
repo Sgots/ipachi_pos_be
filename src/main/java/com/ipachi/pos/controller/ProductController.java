@@ -2,6 +2,8 @@
 package com.ipachi.pos.controller;
 
 import com.ipachi.pos.dto.*;
+import com.ipachi.pos.model.Product;
+import com.ipachi.pos.repo.ProductRepository;
 import com.ipachi.pos.service.ProductService;
 import com.ipachi.pos.service.StockService;
 import com.ipachi.pos.security.CurrentRequest;
@@ -24,6 +26,7 @@ public class ProductController {
     private final ProductService service;
     private final StockService stockService;
     private final CurrentRequest ctx;
+    private final ProductRepository productRepository;
 
     private String base(HttpServletRequest req) {
         var url = req.getRequestURL().toString();
@@ -95,6 +98,21 @@ public class ProductController {
             }
             throw ex;
         }
+    }
+    // src/main/java/com/ipachi/pos/web/InventoryProductController.java
+    @GetMapping(value = "/{id}/qr.png")
+    public ResponseEntity<byte[]> downloadQr(@PathVariable Long id) {
+        Product p = productRepository.findByIdAndBusinessId(id, ctx.getBusinessId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        byte[] data = p.getQrCodeData();
+        if (data == null || data.length == 0) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No QR code for this product");
+        }
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_TYPE, p.getQrContentType() == null ? "image/png" : p.getQrContentType())
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" +
+                        (p.getQrFilename() == null ? ("product-" + p.getId() + ".png") : p.getQrFilename()) + "\"")
+                .body(data);
     }
 
     @DeleteMapping("/{id}")

@@ -13,8 +13,7 @@ import java.time.OffsetDateTime;
         @Index(name = "idx_inv_receipt_business_id", columnList = "business_id"),
         @Index(name = "idx_inv_receipt_at", columnList = "receipt_at")
 })
-@Getter
-@Setter
+@Data
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor

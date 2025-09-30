@@ -70,7 +70,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/register").permitAll()
-                        .requestMatchers("/api/auth/login","/api/users/**", "/api/auth/refresh", "/api/auth/me").permitAll()
+                        .requestMatchers("/api/auth/login","/api/users/**","/dev/seed/**","/api/subscriptions/**","/api/otp/**", "/api/auth/refresh", "/api/auth/me").permitAll()
                         // ⬇️ broaden: covers both /logo and /logo/file/*
                         .requestMatchers(HttpMethod.GET, "/api/business-profile/logo/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/files/**").permitAll()

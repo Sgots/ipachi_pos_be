@@ -90,13 +90,13 @@ public interface TransactionLineRepository extends JpaRepository<TransactionLine
 
     @Query("""
       select new com.ipachi.pos.dto.reports.ProductSalesRow(
-        tl.sku, tl.name, coalesce(sum(tl.grossAmount), 0)
+        tl.sku, tl.name, coalesce(sum(tl.netAmount), 0)
       )
       from TransactionLine tl
       join tl.transaction t
       where t.businessId = :biz and t.createdAt between :start and :end
       group by tl.sku, tl.name
-      order by coalesce(sum(tl.grossAmount), 0) desc
+      order by tl.name asc
     """)
     List<ProductSalesRow> salesByProduct(Long biz, OffsetDateTime start, OffsetDateTime end);
     // src/main/java/com/ipachi/pos/repo/TransactionLineRepository.java
@@ -132,7 +132,7 @@ public interface TransactionLineRepository extends JpaRepository<TransactionLine
   where t.businessId = :biz
     and t.createdAt between :start and :end
   group by c.name
-  order by 2 desc
+  order by c.name asc
 """)
     List<CategoryProfitRow> profitByCategory(Long biz, OffsetDateTime start, OffsetDateTime end);
 

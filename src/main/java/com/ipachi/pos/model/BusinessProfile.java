@@ -1,5 +1,5 @@
+// src/main/java/com/ipachi/pos/model/BusinessProfile.java
 package com.ipachi.pos.model;
-
 
 import jakarta.persistence.*;
 import lombok.*;
@@ -8,7 +8,9 @@ import java.time.OffsetDateTime;
 @Entity @Table(name = "business_profiles")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class BusinessProfile {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    /** We will assign this manually in the service (no @GeneratedValue). */
+    @Id
+    @Column(nullable = false) // keep as BIGINT in DB
     private Long id;
 
     @OneToOne(fetch = FetchType.LAZY, optional = false)
@@ -19,6 +21,7 @@ public class BusinessProfile {
     private String name;
 
     private String location;
+
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "logo_asset_id", unique = true)
     private FileAsset logoAsset;

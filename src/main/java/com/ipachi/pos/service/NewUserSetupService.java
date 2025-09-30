@@ -13,6 +13,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,11 +23,16 @@ import org.springframework.web.server.ResponseStatusException;
 
 import lombok.RequiredArgsConstructor;
 
+import java.util.concurrent.ThreadLocalRandom;
+
 @Service
 @RequiredArgsConstructor
 public class NewUserSetupService {
     private static final Logger log = LoggerFactory.getLogger(NewUserSetupService.class);
 
+    private static final long MIN_BIZ_ID = 900_000_000L;
+    private static final long MAX_BIZ_ID_EXCLUSIVE = 1_000_000_000L; // upper bound (exclusive)
+    private static final int  MAX_ID_ATTEMPTS = 50;
     @PersistenceContext
     private EntityManager entityManager;
 
@@ -120,6 +126,26 @@ public class NewUserSetupService {
         biz.setLocation(req.bizLocation().trim());
         biz.setUser(user);
         if (logo != null) biz.setLogoAsset(logo);
+
+        // If it's a brand-new BusinessProfile (no id yet), allocate a random one safely.
+        if (biz.getId() == null) {
+            biz = persistBusinessWithRandomId(biz);
+        } else {
+            businesses.saveAndFlush(biz);
+        }
+
+        // 3b) Stamp business_profile_id on User
+        if (user.getBusinessProfileId() == null || !biz.getId().equals(user.getBusinessProfileId())) {
+            user.setBusinessProfileId(biz.getId());
+            users.save(user);
+            log.info("Updated user {} with business_profile_id={}", user.getId(), biz.getId());
+        }
+
+
+        biz.setName(req.bizName().trim());
+        biz.setLocation(req.bizLocation().trim());
+        biz.setUser(user);
+        if (logo != null) biz.setLogoAsset(logo);
         businesses.save(biz);
 
         // 3b) Stamp the business_profile_id on User (nullable -> now set)
@@ -153,7 +179,35 @@ public class NewUserSetupService {
                 )
         );
     }
+    private BusinessProfile persistBusinessWithRandomId(BusinessProfile biz) {
+        for (int attempt = 1; attempt <= MAX_ID_ATTEMPTS; attempt++) {
+            long candidate = randomBizId();
+            // Quick existence check to avoid obvious collisions
+            if (businesses.existsById(candidate)) {
+                log.debug("Collision on precheck for candidate id {}, retrying (attempt {}/{})", candidate, attempt, MAX_ID_ATTEMPTS);
+                continue;
+            }
+            biz.setId(candidate);
+            try {
+                BusinessProfile saved = businesses.saveAndFlush(biz);
+                log.info("Allocated BusinessProfile.id={} (attempt {})", candidate, attempt);
+                return saved;
+            } catch (DataIntegrityViolationException ex) {
+                // Handles race conditions where another tx took the same id between exists() and save
+                log.warn("Collision on commit for candidate id {}, retrying (attempt {}/{}): {}",
+                        candidate, attempt, MAX_ID_ATTEMPTS, ex.getMessage());
+                entityManager.detach(biz); // ensure clean state before retrying
+                biz.setId(null);
+            }
+        }
+        throw new IllegalStateException("Could not allocate a unique BusinessProfile.id after "
+                + MAX_ID_ATTEMPTS + " attempts");
+    }
 
+    private static long randomBizId() {
+        long span = MAX_BIZ_ID_EXCLUSIVE - MIN_BIZ_ID; // 100,000,000
+        return MIN_BIZ_ID + ThreadLocalRandom.current().nextLong(span);
+    }
     @Transactional(readOnly = true)
     public NewUserSetupResponse read(String username) {
         User user = users.findByUsername(username).orElseThrow();
